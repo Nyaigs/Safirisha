@@ -1,0 +1,166 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
+}
+
+model User {
+  id                         String             @id @default(cuid())
+  fullName                   String
+  email                      String             @unique
+  phone                      String             @unique
+  createdAt                  DateTime           @default(now())
+  updatedAt                  DateTime           @updatedAt
+  passwordHash               String
+  role                       UserRole
+  isActive                   Boolean            @default(true)
+  suspendedAt                DateTime?
+  suspensionReason           String?
+  username                   String?            @unique
+  isSuperAdmin               Boolean            @default(false)
+  passwordResetCode          String?
+  passwordResetCodeExpiresAt DateTime?
+  passwordResetVerified      Boolean            @default(false)
+  driverProfile              DriverProfile?
+  customerRequests           TransportRequest[] @relation("CustomerRequests")
+  clerkId                    String?            @unique
+
+  @@index([role])
+  @@index([isActive])
+  @@index([isSuperAdmin])
+}
+
+model DriverProfile {
+  id                String                  @id @default(cuid())
+  userId            String                  @unique
+  plateNumber       String?                 @unique
+  vehicleType       String?
+  vehicleImageUrl   String?
+  ownershipProofUrl String?
+  approvalStatus    DriverApprovalStatus    @default(PENDING)
+  availability      DriverAvailability      @default(OFFLINE)
+  currentLat        Float?
+  currentLng        Float?
+  currentHeading    Float?
+  currentSpeed      Float?
+  lastLocationAt    DateTime?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  deletionRequests  DriverDeletionRequest[]
+  user              User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  acceptedRequests  TransportRequest[]      @relation("AssignedDriverRequests")
+
+  @@index([approvalStatus])
+  @@index([availability])
+}
+
+model TransportRequest {
+  id               String        @id @default(cuid())
+  customerId       String
+  assignedDriverId String?
+  pickupAddress    String
+  pickupLat        Float
+  pickupLng        Float
+  dropoffAddress   String
+  dropoffLat       Float
+  dropoffLng       Float
+  vehicleType      String
+  loadDescription  String?
+  loadSize         String
+  specialNotes     String?
+  estimatedPrice   Float
+  distanceKm       Float
+  status           RequestStatus @default(SEARCHING)
+
+  paymentMethod          PaymentMethod?
+  paymentStatus          PaymentStatus  @default(UNPAID)
+  platformFeePercent     Float          @default(10)
+  platformFeeAmount      Float          @default(0)
+  driverNetEarning       Float          @default(0)
+  paidAt                 DateTime?
+  completedAt            DateTime?
+  cashConfirmedByDriver  Boolean        @default(false)
+  mpesaCheckoutRequestId String?
+  mpesaReceiptNumber     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assignedDriver DriverProfile? @relation("AssignedDriverRequests", fields: [assignedDriverId], references: [id])
+  customer       User           @relation("CustomerRequests", fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([assignedDriverId])
+  @@index([customerId])
+  @@index([vehicleType])
+  @@index([paymentStatus])
+  @@index([paymentMethod])
+}
+
+model DriverDeletionRequest {
+  id                String                @id @default(cuid())
+  driverId          String
+  reason            String
+  status            DeletionRequestStatus @default(PENDING)
+  adminNote         String?
+  scheduledDeletion DateTime?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  driver            DriverProfile         @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  @@index([driverId, status])
+}
+
+enum UserRole {
+  CUSTOMER
+  DRIVER
+  ADMIN
+}
+
+enum DriverApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum DriverAvailability {
+  OFFLINE
+  ONLINE
+  BUSY
+}
+
+enum RequestStatus {
+  SEARCHING
+  ACCEPTED
+  DRIVER_EN_ROUTE
+  ARRIVED_PICKUP
+  PICKUP_CONFIRMED
+  IN_TRANSIT
+  ARRIVED_DROPOFF
+  DELIVERY_CONFIRMED
+  PAYMENT_PENDING
+  DELIVERED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  MPESA
+}
+
+enum PaymentStatus {
+  UNPAID
+  PENDING
+  PAID
+  FAILED
+}
+
+enum DeletionRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
