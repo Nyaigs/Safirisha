@@ -1,7 +1,7 @@
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { router, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -16,12 +16,17 @@ import {
 import MapView, { Marker, Polyline } from "react-native-maps";
 import { apiFetch } from "../../lib/api";
 import { connectSocket } from "../../lib/socket";
+import { useTripStore } from "../../store/trip";
 import {
   DriverLiveLocation,
+  DriverLocationUpdatedPayload,
   PaymentMethod,
   PaymentStatus,
   Trip,
+  TripExpiredPayload,
   TripStatus,
+  TripStatusUpdatedPayload,
+  TripUpdatedPayload,
 } from "../../types/trip";
 import { isValidCoordinate, toNumber } from "../../utils/validators";
 
@@ -58,7 +63,7 @@ function getVehicleIcon(vehicle?: string | null) {
   }
 
   if (normalized.includes("pickup")) {
-    return "truck-pickup";
+    return "truck-cargo-container";
   }
 
   if (normalized.includes("lorry")) {
@@ -202,12 +207,14 @@ function getProgressStep(status?: TripStatus) {
 export default function ActiveTripScreen() {
   const { tripId } = useLocalSearchParams<{ tripId?: string }>();
   const mapRef = useRef<MapView | null>(null);
+  const hasClosedRef = useRef(false);
 
-  const [trip, setTrip] = useState<TripWithAddresses | null>(null);
-  const [driverLocation, setDriverLocation] =
-    useState<DriverLiveLocation | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
+  const trip = useTripStore((s) => s.currentTrip) as TripWithAddresses | null;
+  const driverLocation = useTripStore((s) => s.driverLocation);
+  const isLoading = useTripStore((s) => s.isLoading);
+  const isSubmitting = useTripStore((s) => s.isSubmitting);
+  const updateTripStatusAction = useTripStore((s) => s.updateTripStatus);
+  const confirmCashAction = useTripStore((s) => s.confirmCash);
 
   const pickupLat = toNumber((trip as any)?.pickupLat, NaN);
   const pickupLng = toNumber((trip as any)?.pickupLng, NaN);
@@ -232,13 +239,25 @@ export default function ActiveTripScreen() {
     [currentStatus],
   );
 
+  const closeFlow = useCallback((title: string, message: string) => {
+    if (hasClosedRef.current) return;
+    hasClosedRef.current = true;
+
+    Alert.alert(title, message, [
+      {
+        text: "OK",
+        onPress: () => router.replace("/(driver)"),
+      },
+    ]);
+  }, []);
+
   const fitMapToPoints = useCallback(
     (
       nextTrip?: TripWithAddresses | null,
       nextDriver?: DriverLiveLocation | null,
     ) => {
-      const tripData = nextTrip || trip;
-      const driverData = nextDriver || driverLocation;
+      const tripData = nextTrip || useTripStore.getState().currentTrip as TripWithAddresses | null;
+      const driverData = nextDriver || useTripStore.getState().driverLocation;
 
       if (!tripData || !mapRef.current) return;
 
@@ -305,87 +324,101 @@ export default function ActiveTripScreen() {
         );
       }
     },
-    [trip, driverLocation],
+    [],
   );
 
-  useEffect(() => {
-    if (!tripId) {
-      setLoading(false);
-      return;
+  const initTrip = useCallback(async () => {
+    if (!tripId) return null;
+
+    const store = useTripStore;
+    await store.getState().fetchTrip(tripId);
+
+    const fetchedTrip = store.getState().currentTrip as TripWithAddresses | null;
+
+    if (!fetchedTrip) {
+      throw new Error(store.getState().error || "Trip not found");
     }
 
+    const assignedDriver = fetchedTrip.assignedDriver;
+
+    let initialDriverLocation: DriverLiveLocation | null = null;
+
+    if (
+      assignedDriver &&
+      isValidCoordinate(assignedDriver.currentLat) &&
+      isValidCoordinate(assignedDriver.currentLng)
+    ) {
+      initialDriverLocation = {
+        lat: assignedDriver.currentLat!,
+        lng: assignedDriver.currentLng!,
+        heading: assignedDriver.currentHeading ?? undefined,
+        speed: assignedDriver.currentSpeed ?? undefined,
+        updatedAt: assignedDriver.lastLocationAt ?? new Date().toISOString(),
+      };
+
+      store.getState().setDriverLocation(initialDriverLocation);
+    }
+
+    setTimeout(() => {
+      fitMapToPoints(fetchedTrip, initialDriverLocation);
+    }, 300);
+
+    return fetchedTrip;
+  }, [fitMapToPoints, tripId]);
+
+  useEffect(() => {
+    if (!tripId) return;
+
+    const store = useTripStore;
     const socket = connectSocket();
     let mounted = true;
     let locationSub: Location.LocationSubscription | null = null;
 
-    const onTripUpdated = (payload: { trip: TripWithAddresses }) => {
+    const onTripUpdated = (payload: TripUpdatedPayload) => {
       if (!mounted || !payload?.trip || payload.trip.id !== tripId) return;
 
-      setTrip(payload.trip);
+      const nextTrip = payload.trip as TripWithAddresses;
+      store.getState().setCurrentTrip(nextTrip);
 
       setTimeout(() => {
-        fitMapToPoints(payload.trip, driverLocation);
+        fitMapToPoints(nextTrip, store.getState().driverLocation);
       }, 200);
 
-      if (payload.trip.status === "DELIVERED") {
-        Alert.alert(
-          "Trip complete",
-          "Trip and payment completed successfully.",
-          [
-            {
-              text: "OK",
-              onPress: () => router.replace("/(driver)"),
-            },
-          ],
-        );
+      if (nextTrip.status === "DELIVERED") {
+        closeFlow("Trip complete", "Trip and payment completed successfully.");
       }
 
-      if (payload.trip.status === "CANCELLED") {
-        Alert.alert("Trip cancelled", "This trip has been cancelled.", [
-          {
-            text: "OK",
-            onPress: () => router.replace("/(driver)"),
-          },
-        ]);
+      if (nextTrip.status === "CANCELLED") {
+        closeFlow("Trip cancelled", "This trip has been cancelled.");
       }
     };
 
-    const onTripStatusUpdated = (payload: {
-      tripId: string;
-      status: TripStatus;
-      paymentMethod?: PaymentMethod | null;
-      paymentStatus?: PaymentStatus | null;
-    }) => {
+    const onTripStatusUpdated = (payload: TripStatusUpdatedPayload) => {
       if (!mounted || payload.tripId !== tripId) return;
 
-      setTrip((prev) =>
-        prev
-          ? {
-              ...prev,
-              status: payload.status,
-              paymentMethod:
-                payload.paymentMethod !== undefined
-                  ? payload.paymentMethod
-                  : prev.paymentMethod,
-              paymentStatus:
-                payload.paymentStatus !== undefined
-                  ? payload.paymentStatus
-                  : prev.paymentStatus,
-            }
-          : prev,
-      );
+      const prev = store.getState().currentTrip;
+      if (prev) {
+        store.getState().setCurrentTrip({
+          ...prev,
+          status: payload.status,
+          paymentMethod:
+            payload.paymentMethod !== undefined
+              ? payload.paymentMethod
+              : prev.paymentMethod,
+          paymentStatus:
+            payload.paymentStatus !== undefined
+              ? payload.paymentStatus
+              : prev.paymentStatus,
+        } as Trip);
+      }
     };
 
-    const onDriverLocationUpdated = (payload: {
-      tripId?: string;
-      lat?: number;
-      lng?: number;
-      currentLat?: number;
-      currentLng?: number;
-      heading?: number | null;
-      speed?: number | null;
-      updatedAt?: string;
-    }) => {
+    const onTripExpired = (payload: TripExpiredPayload) => {
+      if (!mounted || payload.tripId !== tripId) return;
+      closeFlow("Trip unavailable", "This trip is no longer available.");
+    };
+
+    const onDriverLocationUpdated = (payload: DriverLocationUpdatedPayload) => {
       if (!mounted) return;
       if (payload.tripId && payload.tripId !== tripId) return;
 
@@ -414,7 +447,7 @@ export default function ActiveTripScreen() {
         updatedAt: payload.updatedAt || new Date().toISOString(),
       };
 
-      setDriverLocation(nextLocation);
+      store.getState().setDriverLocation(nextLocation);
 
       mapRef.current?.animateToRegion(
         {
@@ -427,44 +460,21 @@ export default function ActiveTripScreen() {
       );
     };
 
-    const loadTrip = async () => {
+    const start = async () => {
       try {
-        setLoading(true);
+        const fetchedTrip = await initTrip();
 
-        const data = await apiFetch(`/trips/${tripId}`);
-        if (!mounted) return;
+        if (!mounted || !fetchedTrip) return;
 
-        const fetchedTrip = (data?.trip ?? null) as TripWithAddresses | null;
-        setTrip(fetchedTrip);
-
-        const assignedDriver = fetchedTrip?.assignedDriver;
-
-        let initialDriverLocation: DriverLiveLocation | null = null;
-
-        if (
-          assignedDriver &&
-          isValidCoordinate(assignedDriver.currentLat) &&
-          isValidCoordinate(assignedDriver.currentLng)
-        ) {
-          initialDriverLocation = {
-            lat: assignedDriver.currentLat!,
-            lng: assignedDriver.currentLng!,
-            heading: assignedDriver.currentHeading ?? undefined,
-            speed: assignedDriver.currentSpeed ?? undefined,
-            updatedAt:
-              assignedDriver.lastLocationAt ?? new Date().toISOString(),
-          };
-
-          setDriverLocation(initialDriverLocation);
+        if (fetchedTrip.status === "CANCELLED") {
+          closeFlow("Trip closed", "This trip is no longer active.");
+          return;
         }
 
-        setTimeout(() => {
-          fitMapToPoints(fetchedTrip, initialDriverLocation);
-        }, 300);
-
-        socket.emit("join_trip_room", tripId);
+        store.getState().subscribeToTripRoom(tripId);
         socket.on("trip_updated", onTripUpdated);
         socket.on("trip_status_updated", onTripStatusUpdated);
+        socket.on("trip_expired", onTripExpired);
         socket.on("driver_location_updated", onDriverLocationUpdated);
 
         const { status } = await Location.requestForegroundPermissionsAsync();
@@ -500,7 +510,7 @@ export default function ActiveTripScreen() {
                 updatedAt: new Date().toISOString(),
               };
 
-              setDriverLocation(nextLocation);
+              store.getState().setDriverLocation(nextLocation);
             } catch (error) {
               console.log("Failed to sync live driver location", error);
             }
@@ -512,64 +522,46 @@ export default function ActiveTripScreen() {
           error?.message || "Error fetching trip.",
         );
       } finally {
-        if (mounted) {
-          setLoading(false);
-        }
+        /* store manages its own loading state */
       }
     };
 
-    loadTrip();
+    start();
 
     return () => {
       mounted = false;
       locationSub?.remove();
-      socket.emit("leave_trip_room", tripId);
+      store.getState().unsubscribeFromTripRoom(tripId);
       socket.off("trip_updated", onTripUpdated);
       socket.off("trip_status_updated", onTripStatusUpdated);
+      socket.off("trip_expired", onTripExpired);
       socket.off("driver_location_updated", onDriverLocationUpdated);
     };
-  }, [tripId, fitMapToPoints, driverLocation]);
+  }, [tripId, initTrip, fitMapToPoints, closeFlow]);
 
   const updateStatus = async (status: TripStatus) => {
     if (!tripId) return;
 
-    try {
-      setUpdatingStatus(status);
+    await updateTripStatusAction(tripId, status);
 
-      const data = await apiFetch(`/trips/${tripId}/status`, {
-        method: "PATCH",
-        body: { status },
-      });
-
-      setTrip((data?.trip ?? trip) as TripWithAddresses);
-    } catch (error: any) {
+    if (useTripStore.getState().error) {
       Alert.alert(
         "Update failed",
-        error?.message || "Could not update trip status.",
+        useTripStore.getState().error || "Could not update trip status.",
       );
-    } finally {
-      setUpdatingStatus(null);
     }
   };
 
   const confirmCashReceived = async () => {
     if (!tripId) return;
 
-    try {
-      setUpdatingStatus("CASH_CONFIRM");
+    await confirmCashAction(tripId);
 
-      const data = await apiFetch(`/payments/trips/${tripId}/cash/confirm`, {
-        method: "PATCH",
-      });
-
-      setTrip((data?.trip ?? trip) as TripWithAddresses);
-    } catch (error: any) {
+    if (useTripStore.getState().error) {
       Alert.alert(
         "Cash confirmation failed",
-        error?.message || "Could not confirm cash payment.",
+        useTripStore.getState().error || "Could not confirm cash payment.",
       );
-    } finally {
-      setUpdatingStatus(null);
     }
   };
 
@@ -659,7 +651,7 @@ export default function ActiveTripScreen() {
     );
   }
 
-  if (loading) {
+  if (isLoading) {
     return (
       <SafeAreaView style={styles.center}>
         <ActivityIndicator size="large" color="#111827" />
@@ -856,9 +848,9 @@ export default function ActiveTripScreen() {
             <TouchableOpacity
               style={[
                 styles.primaryButton,
-                updatingStatus ? styles.buttonDisabled : null,
+                isSubmitting ? styles.buttonDisabled : null,
               ]}
-              disabled={!!updatingStatus}
+              disabled={isSubmitting}
               onPress={() => {
                 if (actionConfig.type === "status") {
                   updateStatus(actionConfig.nextStatus);
@@ -867,7 +859,7 @@ export default function ActiveTripScreen() {
                 }
               }}
             >
-              {updatingStatus ? (
+              {isSubmitting ? (
                 <ActivityIndicator color="#fff" />
               ) : (
                 <>
@@ -910,7 +902,7 @@ export default function ActiveTripScreen() {
             <Text style={styles.quickInfoValue}>{vehicleLabel}</Text>
           </View>
 
-          <TouchableOpacity style={styles.callButton} onPress={openDialer}>
+          <TouchableOpacity style={styles.callButtonWide} onPress={openDialer}>
             <Ionicons name="call-outline" size={18} color="#fff" />
             <Text style={styles.callButtonText}>Call Customer</Text>
           </TouchableOpacity>
@@ -1167,7 +1159,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     fontSize: 16,
   },
-  callButton: {
+  callButtonWide: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#111827",

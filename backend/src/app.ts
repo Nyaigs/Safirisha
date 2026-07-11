@@ -8,6 +8,7 @@ import driverRoutes from "./routes/driver.routes";
 import paymentRoutes from "./routes/payment.routes";
 import tripRoutes from "./routes/trip.routes";
 import userRoutes from "./routes/user.routes";
+import { errorHandler, notFound } from "./middleware/error.middleware";
 
 const app = express();
 
@@ -32,5 +33,8 @@ app.use("/api/drivers", driverRoutes);
 app.use("/api/trips", tripRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/admin", adminRoutes);
+
+app.use(notFound);
+app.use(errorHandler);
 
 export default app;

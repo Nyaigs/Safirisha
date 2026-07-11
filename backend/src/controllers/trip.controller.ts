@@ -1,5 +1,6 @@
 import { RequestStatus } from "@prisma/client";
 import { Response } from "express";
+import { CANCELLATION_FEES } from "../constants/cancellation";
 import { prisma } from "../lib/prisma";
 import { AuthRequest } from "../middleware/auth.middleware";
 import { buildTripFinancials } from "../services/trip-pricing.service";
@@ -31,14 +32,30 @@ function normalizeVehicleType(value?: string | null) {
 }
 
 const ACTIVE_DRIVER_TRIP_STATUSES: RequestStatus[] = [
-  "ACCEPTED",
-  "DRIVER_EN_ROUTE",
-  "ARRIVED_PICKUP",
-  "PICKUP_CONFIRMED",
-  "IN_TRANSIT",
-  "ARRIVED_DROPOFF",
-  "DELIVERY_CONFIRMED",
-  "PAYMENT_PENDING",
+  RequestStatus.ACCEPTED,
+  RequestStatus.DRIVER_EN_ROUTE,
+  RequestStatus.ARRIVED_PICKUP,
+  RequestStatus.PICKUP_CONFIRMED,
+  RequestStatus.IN_TRANSIT,
+  RequestStatus.ARRIVED_DROPOFF,
+  RequestStatus.DELIVERY_CONFIRMED,
+  RequestStatus.PAYMENT_PENDING,
+];
+
+const ACTIVE_CUSTOMER_TRIP_STATUSES: RequestStatus[] = [
+  RequestStatus.SEARCHING,
+  RequestStatus.SEARCHING_DRIVER,
+  RequestStatus.DRIVER_ASSIGNED,
+  RequestStatus.ACCEPTED,
+  RequestStatus.DRIVER_EN_ROUTE,
+  RequestStatus.DRIVER_ARRIVED,
+  RequestStatus.ARRIVED_PICKUP,
+  RequestStatus.PICKUP_CONFIRMED,
+  RequestStatus.IN_TRANSIT,
+  RequestStatus.ARRIVED_DROPOFF,
+  RequestStatus.DELIVERY_CONFIRMED,
+  RequestStatus.COMPLETED_PENDING_CONFIRMATION,
+  RequestStatus.PAYMENT_PENDING,
 ];
 
 function buildTripInclude() {
@@ -115,6 +132,9 @@ function emitTripAccepted(
   });
 
   emitTripUpdated(req, payload.trip);
+
+  // Broadcast to all drivers that this trip is taken
+  io.emit("trip_taken", { tripId: payload.trip.id });
 }
 
 export async function createTripRequest(req: AuthRequest, res: Response) {
@@ -138,6 +158,7 @@ export async function createTripRequest(req: AuthRequest, res: Response) {
       specialNotes,
       estimatedPrice,
       distanceKm,
+      scheduledFor, // NEW: ISO datetime string
     } = req.body as {
       pickupAddress?: string;
       pickupLat?: number;
@@ -151,6 +172,7 @@ export async function createTripRequest(req: AuthRequest, res: Response) {
       specialNotes?: string;
       estimatedPrice?: number;
       distanceKm?: number;
+      scheduledFor?: string;
     };
 
     if (
@@ -171,6 +193,20 @@ export async function createTripRequest(req: AuthRequest, res: Response) {
       });
     }
 
+    let status: RequestStatus = RequestStatus.SEARCHING;
+    let scheduledDate: Date | null = null;
+
+    if (scheduledFor) {
+      const date = new Date(scheduledFor);
+      if (isNaN(date.getTime()) || date <= new Date()) {
+        return res
+          .status(400)
+          .json({ message: "scheduledFor must be a future datetime" });
+      }
+      scheduledDate = date;
+      status = RequestStatus.SCHEDULED;
+    }
+
     const normalizedVehicleType = normalizeVehicleType(vehicleType);
     const financials = buildTripFinancials(Number(estimatedPrice));
 
@@ -189,7 +225,8 @@ export async function createTripRequest(req: AuthRequest, res: Response) {
         specialNotes: specialNotes?.trim() || null,
         estimatedPrice: Number(estimatedPrice),
         distanceKm: Number(distanceKm),
-        status: "SEARCHING",
+        status: status,
+        scheduledFor: scheduledDate,
         paymentStatus: "UNPAID",
         platformFeePercent: financials.platformFeePercent,
         platformFeeAmount: financials.platformFeeAmount,
@@ -247,13 +284,13 @@ export async function getMyTripStats(req: AuthRequest, res: Response) {
       prisma.transportRequest.count({
         where: {
           customerId,
-          status: "DELIVERED",
+          status: RequestStatus.DELIVERED,
         },
       }),
       prisma.transportRequest.count({
         where: {
           customerId,
-          status: "CANCELLED",
+          status: RequestStatus.CANCELLED,
         },
       }),
     ]);
@@ -398,7 +435,7 @@ export async function acceptTripRequest(req: AuthRequest, res: Response) {
       return res.status(404).json({ message: "Trip not found" });
     }
 
-    if (foundTrip.status !== "SEARCHING") {
+    if (foundTrip.status !== RequestStatus.SEARCHING) {
       return res.status(409).json({
         message: "This trip has already been taken or is no longer available",
       });
@@ -417,12 +454,12 @@ export async function acceptTripRequest(req: AuthRequest, res: Response) {
       const claimed = await tx.transportRequest.updateMany({
         where: {
           id: tripId,
-          status: "SEARCHING",
+          status: RequestStatus.SEARCHING,
           assignedDriverId: null,
         },
         data: {
           assignedDriverId: driver.id,
-          status: "ACCEPTED",
+          status: RequestStatus.ACCEPTED,
         },
       });
 
@@ -487,10 +524,10 @@ export async function updateTripStatus(req: AuthRequest, res: Response) {
     }
 
     const allowedStatuses: RequestStatus[] = [
-      "DRIVER_EN_ROUTE",
-      "ARRIVED_PICKUP",
-      "IN_TRANSIT",
-      "ARRIVED_DROPOFF",
+      RequestStatus.DRIVER_EN_ROUTE,
+      RequestStatus.ARRIVED_PICKUP,
+      RequestStatus.IN_TRANSIT,
+      RequestStatus.ARRIVED_DROPOFF,
     ];
 
     if (!allowedStatuses.includes(status)) {
@@ -523,18 +560,40 @@ export async function updateTripStatus(req: AuthRequest, res: Response) {
       });
     }
 
+    // Full transition matrix including SCHEDULED
     const validTransitions: Record<RequestStatus, RequestStatus[]> = {
-      SEARCHING: [],
-      ACCEPTED: ["DRIVER_EN_ROUTE"],
-      DRIVER_EN_ROUTE: ["ARRIVED_PICKUP"],
-      ARRIVED_PICKUP: [],
-      PICKUP_CONFIRMED: ["IN_TRANSIT"],
-      IN_TRANSIT: ["ARRIVED_DROPOFF"],
-      ARRIVED_DROPOFF: [],
-      DELIVERY_CONFIRMED: [],
-      PAYMENT_PENDING: [],
+      REQUESTING: [RequestStatus.SEARCHING, RequestStatus.CANCELLED],
+      SEARCHING: [RequestStatus.SEARCHING_DRIVER, RequestStatus.CANCELLED],
+      SEARCHING_DRIVER: [
+        RequestStatus.DRIVER_ASSIGNED,
+        RequestStatus.CANCELLED,
+      ],
+      DRIVER_ASSIGNED: [RequestStatus.DRIVER_EN_ROUTE, RequestStatus.CANCELLED],
+      ACCEPTED: [RequestStatus.DRIVER_EN_ROUTE, RequestStatus.CANCELLED],
+      DRIVER_EN_ROUTE: [RequestStatus.ARRIVED_PICKUP, RequestStatus.CANCELLED],
+      DRIVER_ARRIVED: [RequestStatus.PICKUP_CONFIRMED, RequestStatus.CANCELLED],
+      ARRIVED_PICKUP: [RequestStatus.PICKUP_CONFIRMED, RequestStatus.CANCELLED],
+      PICKUP_CONFIRMED: [RequestStatus.IN_TRANSIT, RequestStatus.CANCELLED],
+      IN_TRANSIT: [RequestStatus.ARRIVED_DROPOFF, RequestStatus.CANCELLED],
+      ARRIVED_DROPOFF: [
+        RequestStatus.DELIVERY_CONFIRMED,
+        RequestStatus.CANCELLED,
+      ],
+      DELIVERY_CONFIRMED: [
+        RequestStatus.COMPLETED_PENDING_CONFIRMATION,
+        RequestStatus.PAYMENT_PENDING,
+        RequestStatus.CANCELLED,
+      ],
+      COMPLETED_PENDING_CONFIRMATION: [
+        RequestStatus.COMPLETED,
+        RequestStatus.PAYMENT_PENDING,
+        RequestStatus.CANCELLED,
+      ],
+      COMPLETED: [],
       DELIVERED: [],
+      PAYMENT_PENDING: [RequestStatus.COMPLETED, RequestStatus.CANCELLED],
       CANCELLED: [],
+      SCHEDULED: [], // no manual transitions; cron will move to SEARCHING
     };
 
     const nextAllowed = validTransitions[trip.status] || [];
@@ -586,7 +645,7 @@ export async function confirmPickupByCustomer(req: AuthRequest, res: Response) {
       });
     }
 
-    if (trip.status !== "ARRIVED_PICKUP") {
+    if (trip.status !== RequestStatus.ARRIVED_PICKUP) {
       return res.status(400).json({
         message: "Pickup can only be confirmed when driver has arrived",
       });
@@ -594,7 +653,7 @@ export async function confirmPickupByCustomer(req: AuthRequest, res: Response) {
 
     const updatedTrip = await prisma.transportRequest.update({
       where: { id: tripId },
-      data: { status: "PICKUP_CONFIRMED" },
+      data: { status: RequestStatus.PICKUP_CONFIRMED },
       include: buildTripInclude(),
     });
 
@@ -624,7 +683,18 @@ export async function confirmDeliveryByCustomer(
 
     const trip = await prisma.transportRequest.findUnique({
       where: { id: tripId },
-      include: buildTripInclude(),
+      include: {
+        assignedDriver: true,
+        customer: {
+          select: {
+            id: true,
+            fullName: true,
+            phone: true,
+            email: true,
+            username: true,
+          },
+        },
+      },
     });
 
     if (!trip) {
@@ -637,17 +707,28 @@ export async function confirmDeliveryByCustomer(
       });
     }
 
-    if (trip.status !== "ARRIVED_DROPOFF") {
+    if (trip.status !== RequestStatus.ARRIVED_DROPOFF) {
       return res.status(400).json({
         message:
           "Delivery can only be confirmed when driver has arrived at drop-off",
       });
     }
 
-    const updatedTrip = await prisma.transportRequest.update({
-      where: { id: tripId },
-      data: { status: "DELIVERY_CONFIRMED" },
-      include: buildTripInclude(),
+    const updatedTrip = await prisma.$transaction(async (tx) => {
+      const updated = await tx.transportRequest.update({
+        where: { id: tripId },
+        data: { status: RequestStatus.DELIVERY_CONFIRMED },
+        include: buildTripInclude(),
+      });
+
+      if (trip.assignedDriverId) {
+        await tx.driverProfile.update({
+          where: { id: trip.assignedDriverId },
+          data: { availability: "ONLINE" },
+        });
+      }
+
+      return updated;
     });
 
     emitTripUpdated(req, updatedTrip);
@@ -676,6 +757,7 @@ export async function cancelTripByCustomer(req: AuthRequest, res: Response) {
   try {
     const userId = req.user?.id;
     const tripId = String(req.params.id || req.params.tripId || "");
+    const { reason } = req.body;
 
     if (!userId) {
       return res.status(401).json({ message: "Unauthorized" });
@@ -696,28 +778,41 @@ export async function cancelTripByCustomer(req: AuthRequest, res: Response) {
     }
 
     if (trip.customerId !== userId) {
-      return res
-        .status(403)
-        .json({ message: "You can only cancel your own trip" });
-    }
-
-    const cancellableStatuses: RequestStatus[] = [
-      "SEARCHING",
-      "ACCEPTED",
-      "DRIVER_EN_ROUTE",
-    ];
-
-    if (!cancellableStatuses.includes(trip.status)) {
-      return res.status(400).json({
-        message: `Trip cannot be cancelled once it is ${String(trip.status).replace(/_/g, " ").toLowerCase()}`,
+      return res.status(403).json({
+        message: "You can only cancel your own trip",
       });
     }
+
+    // Allowed statuses: searching, accepted, en route, and scheduled
+    const allowedStatuses: RequestStatus[] = [
+      RequestStatus.SEARCHING,
+      RequestStatus.ACCEPTED,
+      RequestStatus.DRIVER_EN_ROUTE,
+      RequestStatus.SCHEDULED, // <-- NEW
+    ];
+    if (!allowedStatuses.includes(trip.status)) {
+      return res.status(400).json({
+        message: `Cannot cancel trip in status ${trip.status}. Only before pickup.`,
+      });
+    }
+
+    let cancellationFee = 0;
+    if (
+      trip.status === RequestStatus.ACCEPTED ||
+      trip.status === RequestStatus.DRIVER_EN_ROUTE
+    ) {
+      cancellationFee = CANCELLATION_FEES.CUSTOMER[trip.status] || 0;
+    }
+    // For SCHEDULED, fee remains 0.
 
     const updatedTrip = await prisma.$transaction(async (tx) => {
       const nextTrip = await tx.transportRequest.update({
         where: { id: tripId },
         data: {
-          status: "CANCELLED",
+          status: RequestStatus.CANCELLED,
+          cancellationReason: reason || "Customer cancelled the trip",
+          cancelledBy: "CUSTOMER",
+          cancellationFee: cancellationFee,
           paymentStatus:
             trip.paymentStatus === "PAID" ? trip.paymentStatus : "FAILED",
         },
@@ -729,19 +824,253 @@ export async function cancelTripByCustomer(req: AuthRequest, res: Response) {
           where: { id: trip.assignedDriverId },
           data: { availability: "ONLINE" },
         });
+        if (cancellationFee > 0) {
+          console.log(
+            `Driver ${trip.assignedDriverId} earned ${cancellationFee} KES cancellation fee`,
+          );
+        }
       }
 
       return nextTrip;
     });
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(`trip:${tripId}`).emit("trip_cancelled", {
+        tripId: trip.id,
+        cancelledBy: "CUSTOMER",
+        reason: updatedTrip.cancellationReason,
+        fee: cancellationFee,
+      });
+    }
 
     emitTripUpdated(req, updatedTrip);
 
     return res.json({
       message: "Trip cancelled successfully",
       trip: updatedTrip,
+      fee: cancellationFee,
     });
   } catch (error) {
     console.error("cancelTripByCustomer error:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+}
+
+export async function cancelTripByDriver(req: AuthRequest, res: Response) {
+  try {
+    const userId = req.user?.id;
+    const tripId = String(req.params.id || req.params.tripId || "");
+    const { reason } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const driver = await prisma.driverProfile.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+
+    if (!driver) {
+      return res.status(404).json({ message: "Driver profile not found" });
+    }
+
+    const trip = await prisma.transportRequest.findUnique({
+      where: { id: tripId },
+      include: { assignedDriver: true },
+    });
+
+    if (!trip) {
+      return res.status(404).json({ message: "Trip not found" });
+    }
+
+    if (trip.assignedDriverId !== driver.id) {
+      return res.status(403).json({
+        message: "You are not assigned to this trip",
+      });
+    }
+
+    // Driver can cancel only if they have accepted or are en route (not scheduled)
+    const allowedStatuses: RequestStatus[] = [
+      RequestStatus.ACCEPTED,
+      RequestStatus.DRIVER_EN_ROUTE,
+    ];
+    if (!allowedStatuses.includes(trip.status)) {
+      return res.status(400).json({
+        message: `Cannot cancel trip in status ${trip.status}. Only before pickup.`,
+      });
+    }
+
+    let penalty = 0;
+    if (trip.status === RequestStatus.ACCEPTED) {
+      penalty = CANCELLATION_FEES.DRIVER.ACCEPTED;
+    } else if (trip.status === RequestStatus.DRIVER_EN_ROUTE) {
+      penalty = CANCELLATION_FEES.DRIVER.DRIVER_EN_ROUTE;
+    }
+
+    const updatedTrip = await prisma.$transaction(async (tx) => {
+      const nextTrip = await tx.transportRequest.update({
+        where: { id: tripId },
+        data: {
+          status: RequestStatus.CANCELLED,
+          cancellationReason: reason || "Driver cancelled the trip",
+          cancelledBy: "DRIVER",
+          cancellationFee: penalty,
+          paymentStatus:
+            trip.paymentStatus === "PAID" ? trip.paymentStatus : "FAILED",
+        },
+        include: buildTripInclude(),
+      });
+
+      await tx.driverProfile.update({
+        where: { id: driver.id },
+        data: { availability: "ONLINE" },
+      });
+
+      if (penalty > 0) {
+        console.log(
+          `Driver ${driver.id} will be charged ${penalty} KES for cancellation`,
+        );
+      }
+
+      return nextTrip;
+    });
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(`trip:${tripId}`).emit("trip_cancelled", {
+        tripId: trip.id,
+        cancelledBy: "DRIVER",
+        reason: updatedTrip.cancellationReason,
+        fee: penalty,
+      });
+    }
+
+    emitTripUpdated(req, updatedTrip);
+
+    return res.json({
+      message: "Trip cancelled by driver",
+      trip: updatedTrip,
+      penalty: penalty,
+    });
+  } catch (error) {
+    console.error("cancelTripByDriver error:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+}
+
+// ---------- CUSTOMER ACTIVE TRIP ----------
+export async function getMyCustomerActiveTrip(req: AuthRequest, res: Response) {
+  try {
+    const customerId = req.user?.id;
+
+    if (!customerId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const trip = await prisma.transportRequest.findFirst({
+      where: {
+        customerId,
+        status: {
+          in: ACTIVE_CUSTOMER_TRIP_STATUSES,
+        },
+      },
+      orderBy: { updatedAt: "desc" },
+      include: buildTripInclude(),
+    });
+
+    return res.json({ trip: trip ?? null });
+  } catch (error) {
+    console.error("getMyCustomerActiveTrip error:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+}
+
+// ---------- DRIVER STARTS TRANSIT ----------
+export async function confirmPickupConfirmedByDriver(
+  req: AuthRequest,
+  res: Response,
+) {
+  try {
+    const userId = req.user?.id;
+    const tripId = String(req.params.id || req.params.tripId || "");
+
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const driver = await prisma.driverProfile.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+
+    if (!driver) {
+      return res.status(404).json({ message: "Driver profile not found" });
+    }
+
+    const trip = await prisma.transportRequest.findUnique({
+      where: { id: tripId },
+      include: { assignedDriver: true },
+    });
+
+    if (!trip) {
+      return res.status(404).json({ message: "Trip not found" });
+    }
+
+    if (trip.assignedDriverId !== driver.id) {
+      return res.status(403).json({
+        message: "You are not assigned to this trip",
+      });
+    }
+
+    if (trip.status !== RequestStatus.PICKUP_CONFIRMED) {
+      return res.status(400).json({
+        message: `Cannot start transit from status ${trip.status}. Pickup must be confirmed first.`,
+      });
+    }
+
+    const updatedTrip = await prisma.transportRequest.update({
+      where: { id: tripId },
+      data: { status: RequestStatus.IN_TRANSIT },
+      include: buildTripInclude(),
+    });
+
+    emitTripUpdated(req, updatedTrip);
+
+    return res.json({
+      message: "Transit started successfully",
+      trip: updatedTrip,
+    });
+  } catch (error) {
+    console.error("confirmPickupConfirmedByDriver error:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+}
+
+// ---------- NEW: GET SCHEDULED TRIPS ----------
+export async function getMyScheduledTrips(req: AuthRequest, res: Response) {
+  try {
+    const customerId = req.user?.id;
+    if (!customerId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const trips = await prisma.transportRequest.findMany({
+      where: {
+        customerId,
+        status: RequestStatus.SCHEDULED,
+        scheduledFor: {
+          gte: new Date(),
+        },
+      },
+      orderBy: { scheduledFor: "asc" },
+      include: buildTripInclude(),
+    });
+
+    return res.json({ trips });
+  } catch (error) {
+    console.error("getMyScheduledTrips error:", error);
     return res.status(500).json({ message: "Server error" });
   }
 }

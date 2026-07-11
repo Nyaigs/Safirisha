@@ -11,7 +11,6 @@ import {
   View,
 } from "react-native";
 import { apiFetch } from "../../../lib/api";
-import { useAuthStore } from "../../../store/auth";
 
 type TripStatus =
   | "SEARCHING"
@@ -136,8 +135,6 @@ function isActiveStatus(status: TripStatus) {
 }
 
 export default function HistoryScreen() {
-  const token = useAuthStore((state) => state.token);
-
   const [trips, setTrips] = useState<TripItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -146,11 +143,6 @@ export default function HistoryScreen() {
     try {
       const data = await apiFetch("/trips/my-trips", {
         method: "GET",
-        headers: token
-          ? {
-              Authorization: `Bearer ${token}`,
-            }
-          : undefined,
       });
 
       const tripList = Array.isArray(data)
@@ -179,7 +171,7 @@ export default function HistoryScreen() {
       console.error("Failed to fetch trips:", error);
       setTrips([]);
     }
-  }, [token]);
+  }, []);
 
   const loadTrips = useCallback(async () => {
     try {
@@ -305,7 +297,7 @@ export default function HistoryScreen() {
               >
                 <View style={styles.cardTopRow}>
                   <View>
-                    <Text style={styles.requestId}>{trip.id}</Text>
+                    <Text style={styles.requestId}>{`#${trip.id.slice(0, 8).toUpperCase()}`}</Text>
                     <Text style={styles.dateText}>
                       {formatTripDate(trip.createdAt)}
                     </Text>

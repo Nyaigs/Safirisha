@@ -25,9 +25,9 @@ model User {
   passwordResetCode          String?
   passwordResetCodeExpiresAt DateTime?
   passwordResetVerified      Boolean            @default(false)
+  clerkId                    String?            @unique
   driverProfile              DriverProfile?
   customerRequests           TransportRequest[] @relation("CustomerRequests")
-  clerkId                    String?            @unique
 
   @@index([role])
   @@index([isActive])
@@ -59,46 +59,47 @@ model DriverProfile {
 }
 
 model TransportRequest {
-  id               String        @id @default(cuid())
-  customerId       String
-  assignedDriverId String?
-  pickupAddress    String
-  pickupLat        Float
-  pickupLng        Float
-  dropoffAddress   String
-  dropoffLat       Float
-  dropoffLng       Float
-  vehicleType      String
-  loadDescription  String?
-  loadSize         String
-  specialNotes     String?
-  estimatedPrice   Float
-  distanceKm       Float
-  status           RequestStatus @default(SEARCHING)
-
-  paymentMethod          PaymentMethod?
-  paymentStatus          PaymentStatus  @default(UNPAID)
-  platformFeePercent     Float          @default(10)
-  platformFeeAmount      Float          @default(0)
-  driverNetEarning       Float          @default(0)
-  paidAt                 DateTime?
-  completedAt            DateTime?
+  cancellationReason      String?
+  cancelledBy             CancellationBy?
+  cancellationFee         Float?
+  scheduledFor            DateTime?              // <-- NEW
+  id                     String         @id @default(cuid())
+  customerId             String
+  assignedDriverId       String?
+  pickupAddress          String
+  pickupLat              Float
+  pickupLng              Float
+  dropoffAddress         String
+  dropoffLat             Float
+  dropoffLng             Float
+  vehicleType            String
+  loadDescription        String?
+  loadSize               String
+  specialNotes           String?
+  estimatedPrice         Float
+  distanceKm             Float
+  status                 RequestStatus  @default(REQUESTING)
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
   cashConfirmedByDriver  Boolean        @default(false)
+  completedAt            DateTime?
+  driverNetEarning       Float          @default(0)
   mpesaCheckoutRequestId String?
   mpesaReceiptNumber     String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  assignedDriver DriverProfile? @relation("AssignedDriverRequests", fields: [assignedDriverId], references: [id])
-  customer       User           @relation("CustomerRequests", fields: [customerId], references: [id], onDelete: Cascade)
-
-  @@index([status, createdAt])
-  @@index([assignedDriverId])
-  @@index([customerId])
-  @@index([vehicleType])
-  @@index([paymentStatus])
-  @@index([paymentMethod])
+  paidAt                 DateTime?
+  paymentMethod          PaymentMethod?
+  paymentStatus          PaymentStatus  @default(UNPAID)
+  platformFeeAmount      Float          @default(0)
+  platformFeePercent     Float          @default(10)
+  acceptedAt             DateTime?
+  cancelledAt            DateTime?
+  expiredAt              DateTime?
+  expiresAt              DateTime?
+  searchStartedAt        DateTime?
+  pickupConfirmed        Boolean        @default(false)
+  deliveryConfirmed      Boolean        @default(false)
+  assignedDriver         DriverProfile? @relation("AssignedDriverRequests", fields: [assignedDriverId], references: [id])
+  customer               User           @relation("CustomerRequests", fields: [customerId], references: [id], onDelete: Cascade)
 }
 
 model DriverDeletionRequest {
@@ -134,17 +135,24 @@ enum DriverAvailability {
 }
 
 enum RequestStatus {
-  SEARCHING
-  ACCEPTED
-  DRIVER_EN_ROUTE
-  ARRIVED_PICKUP
-  PICKUP_CONFIRMED
-  IN_TRANSIT
-  ARRIVED_DROPOFF
-  DELIVERY_CONFIRMED
-  PAYMENT_PENDING
-  DELIVERED
-  CANCELLED
+    REQUESTING
+    SEARCHING
+    SEARCHING_DRIVER
+    ACCEPTED
+    DRIVER_ASSIGNED
+    DRIVER_EN_ROUTE
+    DRIVER_ARRIVED
+    ARRIVED_PICKUP
+    PICKUP_CONFIRMED
+    IN_TRANSIT
+    ARRIVED_DROPOFF
+    DELIVERY_CONFIRMED
+    COMPLETED_PENDING_CONFIRMATION
+    COMPLETED
+    DELIVERED
+    PAYMENT_PENDING
+    CANCELLED
+    SCHEDULED          // <-- NEW
 }
 
 enum PaymentMethod {
@@ -163,4 +171,9 @@ enum DeletionRequestStatus {
   PENDING
   APPROVED
   REJECTED
+}
+
+enum CancellationBy {
+  CUSTOMER
+  DRIVER
 }

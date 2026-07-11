@@ -104,6 +104,10 @@ export default function ProfileScreen() {
     ]);
   };
 
+  const handleEditProfile = () => {
+    router.push("/(customer)/edit-profile");
+  };
+
   return (
     <ScrollView
       contentContainerStyle={styles.scrollContainer}
@@ -126,7 +130,11 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        <View style={styles.profileCard}>
+        <TouchableOpacity
+          style={styles.profileCard}
+          activeOpacity={0.7}
+          onPress={handleEditProfile}
+        >
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>{initials}</Text>
           </View>
@@ -140,7 +148,12 @@ export default function ProfileScreen() {
           <Text style={styles.userEmail}>
             {user?.email ?? "No email available"}
           </Text>
-        </View>
+
+          <View style={styles.editBadge}>
+            <Ionicons name="create-outline" size={14} color="#fff" />
+            <Text style={styles.editBadgeText}>Edit Profile</Text>
+          </View>
+        </TouchableOpacity>
 
         <View style={styles.statsCard}>
           <View style={styles.statItem}>
@@ -188,9 +201,7 @@ export default function ProfileScreen() {
 
           <TouchableOpacity
             style={styles.menuItem}
-            onPress={() =>
-              Alert.alert("Support", "Support screen not connected yet.")
-            }
+            onPress={() => router.push("/(customer)/settings")}
           >
             <View style={styles.menuLeft}>
               <Ionicons name="call-outline" size={20} color="#111827" />
@@ -201,12 +212,7 @@ export default function ProfileScreen() {
 
           <TouchableOpacity
             style={styles.menuItem}
-            onPress={() =>
-              Alert.alert(
-                "Privacy & Security",
-                "Privacy screen not connected yet.",
-              )
-            }
+            onPress={() => router.push("/(customer)/privacy")}
           >
             <View style={styles.menuLeft}>
               <Ionicons
@@ -221,9 +227,7 @@ export default function ProfileScreen() {
 
           <TouchableOpacity
             style={styles.menuItem}
-            onPress={() =>
-              Alert.alert("Settings", "Settings screen not connected yet.")
-            }
+            onPress={() => router.push("/(customer)/settings")}
           >
             <View style={styles.menuLeft}>
               <Ionicons name="settings-outline" size={20} color="#111827" />
@@ -309,6 +313,21 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: "700",
     color: "#fff",
+  },
+  editBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 10,
+    backgroundColor: "#111827",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    gap: 4,
+  },
+  editBadgeText: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "600",
   },
   userName: {
     fontSize: 22,

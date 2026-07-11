@@ -27,19 +27,14 @@ export type AuthRequest = Request & {
 
 async function resolveAuthIdentity(req: Request): Promise<AuthIdentity | null> {
   const authHeader = req.headers.authorization;
-
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return null;
-  }
+  if (!authHeader?.startsWith("Bearer ")) return null;
 
   const token = authHeader.split(" ")[1];
-
-  if (!token) {
-    return null;
-  }
+  if (!token) return null;
 
   const clerkSecretKey = process.env.CLERK_SECRET_KEY;
 
+  // Clerk auth
   if (clerkSecretKey) {
     try {
       const payload = await verifyToken(token, {
@@ -52,20 +47,15 @@ async function resolveAuthIdentity(req: Request): Promise<AuthIdentity | null> {
           clerkUserId: String(payload.sub),
         };
       }
-    } catch {
-      // fall through to legacy JWT verification
-    }
+    } catch {}
   }
 
+  // Legacy JWT
   const jwtSecret = process.env.JWT_SECRET;
-
-  if (!jwtSecret) {
-    return null;
-  }
+  if (!jwtSecret) return null;
 
   try {
     const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
-
     return {
       authProvider: "legacy",
       legacyUserId: decoded.id,
@@ -76,6 +66,7 @@ async function resolveAuthIdentity(req: Request): Promise<AuthIdentity | null> {
   }
 }
 
+// Lightweight identity check (no DB)
 export async function authenticateIdentity(
   req: AuthRequest,
   res: Response,
@@ -85,17 +76,18 @@ export async function authenticateIdentity(
     const identity = await resolveAuthIdentity(req);
 
     if (!identity) {
-      return res.status(401).json({ message: "Missing or invalid token" });
+      return res.status(401).json({ message: "Unauthorized" });
     }
 
     req.authIdentity = identity;
     next();
   } catch (error) {
     console.error("authenticateIdentity error:", error);
-    return res.status(401).json({ message: "Invalid token" });
+    return res.status(500).json({ message: "Auth error" });
   }
 }
 
+// Full auth
 export async function authenticate(
   req: AuthRequest,
   res: Response,
@@ -103,66 +95,44 @@ export async function authenticate(
 ) {
   try {
     const identity = await resolveAuthIdentity(req);
-
     if (!identity) {
       return res.status(401).json({ message: "Missing or invalid token" });
     }
 
     req.authIdentity = identity;
 
+    let dbUser = null;
+
     if (identity.authProvider === "legacy") {
-      const dbUser = await prisma.user.findUnique({
+      dbUser = await prisma.user.findUnique({
         where: { id: identity.legacyUserId },
-        select: {
-          id: true,
-          role: true,
-          isActive: true,
-          clerkId: true,
-        },
       });
-
-      if (!dbUser || !dbUser.isActive) {
-        return res.status(401).json({ message: "Account is inactive" });
-      }
-
-      req.user = {
-        id: dbUser.id,
-        role: dbUser.role,
-        authProvider: "legacy",
-        clerkUserId: dbUser.clerkId ?? undefined,
-      };
-
-      return next();
     }
 
-    const dbUser = await prisma.user.findFirst({
-      where: { clerkId: identity.clerkUserId },
-      select: {
-        id: true,
-        role: true,
-        isActive: true,
-        clerkId: true,
-      },
-    });
+    if (identity.authProvider === "clerk") {
+      dbUser = await prisma.user.findUnique({
+        where: { clerkId: identity.clerkUserId },
+      });
+    }
 
     if (!dbUser) {
-      return res.status(401).json({ message: "Account bootstrap required" });
+      return res.status(401).json({ message: "User not found" });
     }
 
     if (!dbUser.isActive) {
-      return res.status(401).json({ message: "Account is inactive" });
+      return res.status(403).json({ message: "Account inactive" });
     }
 
     req.user = {
       id: dbUser.id,
       role: dbUser.role,
-      authProvider: "clerk",
+      authProvider: identity.authProvider,
       clerkUserId: dbUser.clerkId ?? undefined,
     };
 
     next();
   } catch (error) {
     console.error("authenticate error:", error);
-    return res.status(401).json({ message: "Invalid token" });
+    return res.status(500).json({ message: "Auth system error" });
   }
 }

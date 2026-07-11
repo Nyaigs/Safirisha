@@ -1,6 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { disconnectSocket, refreshSocketToken } from "../lib/socket";
+import { setLegacyToken } from "../lib/auth-token";
 
 export type DriverProfile = {
   id: string;
@@ -34,8 +36,10 @@ type AuthState = {
   token: string | null;
   authMode: AuthMode;
   hasHydrated: boolean;
+
   login: (user: User, token?: string | null, authMode?: AuthMode) => void;
   logout: () => void;
+
   setHasHydrated: (value: boolean) => void;
   setUser: (user: User | null) => void;
   setToken: (token: string | null) => void;
@@ -50,48 +54,45 @@ export const useAuthStore = create<AuthState>()(
       authMode: null,
       hasHydrated: false,
 
-      login: (user, token = null, authMode = "legacy") =>
-        set({
-          user,
-          token,
-          authMode,
-        }),
+login: (user, token = null, authMode = "legacy") => {
+        set({ user, token, authMode });
+        if (authMode === "legacy") {
+          setLegacyToken(token);
+        }
+        refreshSocketToken();
+      },
 
-      logout: () =>
+      logout: () => {
+        disconnectSocket();
+        setLegacyToken(null);
         set({
           user: null,
           token: null,
           authMode: null,
-        }),
+        });
+      },
 
-      setHasHydrated: (value) =>
-        set({
-          hasHydrated: value,
-        }),
+      setHasHydrated: (value) => set({ hasHydrated: value }),
 
-      setUser: (user) =>
-        set({
-          user,
-        }),
+      setUser: (user) => set({ user }),
 
-      setToken: (token) =>
-        set({
-          token,
-        }),
+      setToken: (token) => {
+        set({ token });
+        setLegacyToken(token);
+      },
 
-      setAuthMode: (authMode) =>
-        set({
-          authMode,
-        }),
+      setAuthMode: (authMode) => set({ authMode }),
     }),
     {
       name: "safirisha-auth",
       storage: createJSONStorage(() => AsyncStorage),
+
       partialize: (state) => ({
         user: state.user,
         token: state.token,
         authMode: state.authMode,
       }),
+
       onRehydrateStorage: () => (state) => {
         state?.setHasHydrated(true);
       },

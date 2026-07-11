@@ -2,11 +2,15 @@ import { Router } from "express";
 import {
   acceptTripRequest,
   cancelTripByCustomer,
+  cancelTripByDriver,
   completeTripAfterDeliveryConfirmation,
   confirmDeliveryByCustomer,
   confirmPickupByCustomer,
+  confirmPickupConfirmedByDriver,
   createTripRequest,
+  getMyCustomerActiveTrip,
   getMyDriverActiveTrip,
+  getMyScheduledTrips, // <-- NEW
   getMyTripStats,
   getMyTrips,
   getTripById,
@@ -29,6 +33,20 @@ router.get(
 );
 
 router.get(
+  "/my-active",
+  authenticate,
+  authorizeRoles("CUSTOMER"),
+  getMyCustomerActiveTrip,
+);
+
+router.get(
+  "/my-scheduled",
+  authenticate,
+  authorizeRoles("CUSTOMER"),
+  getMyScheduledTrips,
+); // <-- NEW
+
+router.get(
   "/my-active-driver",
   authenticate,
   authorizeRoles("DRIVER"),
@@ -42,6 +60,13 @@ router.patch(
   authenticate,
   authorizeRoles("CUSTOMER"),
   cancelTripByCustomer,
+);
+
+router.patch(
+  "/:id/cancel/driver",
+  authenticate,
+  authorizeRoles("DRIVER"),
+  cancelTripByDriver,
 );
 
 router.patch(
@@ -72,7 +97,13 @@ router.patch(
   updateTripStatus,
 );
 
-// kept only so old frontend won't crash hard
+router.patch(
+  "/:id/start-transit",
+  authenticate,
+  authorizeRoles("DRIVER"),
+  confirmPickupConfirmedByDriver,
+);
+
 router.patch(
   "/:id/complete",
   authenticate,

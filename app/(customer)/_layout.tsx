@@ -1,5 +1,6 @@
 import { Redirect, Stack } from "expo-router";
 import { ActivityIndicator, View } from "react-native";
+import { ErrorBoundary } from "../../components/error-boundary";
 import { useAuthStore } from "../../store/auth";
 
 export default function CustomerLayout() {
@@ -31,11 +32,17 @@ export default function CustomerLayout() {
   }
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="request" />
-      <Stack.Screen name="searching" />
-      <Stack.Screen name="driver-found" />
-    </Stack>
+    <ErrorBoundary>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="request" />
+        <Stack.Screen name="searching" />
+        <Stack.Screen name="driver-found" />
+        <Stack.Screen name="live-trip" />
+        <Stack.Screen name="settings" />
+        <Stack.Screen name="privacy" />
+        <Stack.Screen name="edit-profile" />
+      </Stack>
+    </ErrorBoundary>
   );
 }

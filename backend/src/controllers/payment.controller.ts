@@ -36,6 +36,7 @@ function emitTripUpdated(req: AuthRequest, trip: any) {
   if (!io) return;
 
   io.to(`trip:${trip.id}`).emit("trip_updated", { trip });
+
   io.to(`trip:${trip.id}`).emit("trip_status_updated", {
     tripId: trip.id,
     status: trip.status,
@@ -46,19 +47,21 @@ function emitTripUpdated(req: AuthRequest, trip: any) {
   io.emit("admin_stats_updated");
 }
 
+// PAYMENT METHOD
+
 export async function choosePaymentMethod(req: AuthRequest, res: Response) {
   try {
     const userId = req.user?.id;
     const tripId = String(req.params.id || "");
-    const paymentMethod = String(
+
+    const paymentMethodRaw = String(
       req.body?.paymentMethod || "",
-    ).toUpperCase() as PaymentMethod;
+    ).toUpperCase();
+    const paymentMethod = paymentMethodRaw as PaymentMethod;
 
-    if (!userId) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
-    if (!["CASH", "MPESA"].includes(paymentMethod)) {
+    if (!Object.values(PaymentMethod).includes(paymentMethod)) {
       return res.status(400).json({ message: "Invalid payment method" });
     }
 
@@ -67,51 +70,42 @@ export async function choosePaymentMethod(req: AuthRequest, res: Response) {
       include: buildTripInclude(),
     });
 
-    if (!trip) {
-      return res.status(404).json({ message: "Trip not found" });
-    }
+    if (!trip) return res.status(404).json({ message: "Trip not found" });
 
     if (trip.customerId !== userId) {
-      return res.status(403).json({
-        message: "You can only set payment method for your own trip",
-      });
+      return res.status(403).json({ message: "Not your trip" });
     }
 
-    if (
-      trip.status !== "DELIVERY_CONFIRMED" &&
-      trip.status !== "PAYMENT_PENDING"
-    ) {
-      return res.status(400).json({
-        message: "Payment can only be selected after delivery is confirmed",
-      });
-    }
+     if (!["COMPLETED_PENDING_CONFIRMATION", "PAYMENT_PENDING"].includes(trip.status)) {
+       return res.status(400).json({
+         message: "Payment only allowed after delivery confirmation",
+       });
+     }
 
     if (trip.paymentStatus === "PAID") {
-      return res.status(400).json({
-        message: "This trip has already been paid and completed",
-      });
+      return res.status(400).json({ message: "Already paid" });
     }
 
     if (trip.paymentMethod && trip.paymentMethod !== paymentMethod) {
       return res.status(409).json({
-        message: "Payment method has already been selected for this trip",
+        message: "Payment method already locked",
       });
     }
 
-    const updatedTrip = await prisma.transportRequest.update({
-      where: { id: tripId },
-      data: {
-        paymentMethod,
-        paymentStatus: paymentMethod === "CASH" ? "PENDING" : "UNPAID",
-        status: "PAYMENT_PENDING",
-      },
-      include: buildTripInclude(),
-    });
+     const updatedTrip = await prisma.transportRequest.update({
+       where: { id: tripId },
+       data: {
+         paymentMethod,
+         paymentStatus: paymentMethod === "CASH" ? "PENDING" : "UNPAID",
+         status: "COMPLETED_PENDING_CONFIRMATION",
+       },
+       include: buildTripInclude(),
+     });
 
     emitTripUpdated(req, updatedTrip);
 
     return res.json({
-      message: "Payment method selected successfully",
+      message: "Payment method selected",
       trip: updatedTrip,
     });
   } catch (error) {
@@ -120,49 +114,32 @@ export async function choosePaymentMethod(req: AuthRequest, res: Response) {
   }
 }
 
+//Payment simulated
+
 export async function initiateMpesaPayment(req: AuthRequest, res: Response) {
   try {
     const userId = req.user?.id;
     const tripId = String(req.params.id || "");
 
-    if (!userId) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
     const trip = await prisma.transportRequest.findUnique({
       where: { id: tripId },
       include: buildTripInclude(),
     });
 
-    if (!trip) {
-      return res.status(404).json({ message: "Trip not found" });
-    }
+    if (!trip) return res.status(404).json({ message: "Trip not found" });
 
     if (trip.customerId !== userId) {
-      return res.status(403).json({
-        message: "You can only pay for your own trip",
-      });
+      return res.status(403).json({ message: "Not your trip" });
     }
 
-    if (
-      trip.status !== "DELIVERY_CONFIRMED" &&
-      trip.status !== "PAYMENT_PENDING"
-    ) {
-      return res.status(400).json({
-        message: "Payment can only start after delivery is confirmed",
-      });
+    if (!["COMPLETED_PENDING_CONFIRMATION", "PAYMENT_PENDING"].includes(trip.status)) {
+      return res.status(400).json({ message: "Invalid trip state" });
     }
 
     if (trip.paymentStatus === "PAID") {
-      return res.status(400).json({
-        message: "This trip has already been paid and completed",
-      });
-    }
-
-    if (trip.paymentMethod && trip.paymentMethod !== "MPESA") {
-      return res.status(409).json({
-        message: "This trip is already set to a different payment method",
-      });
+      return res.status(400).json({ message: "Already paid" });
     }
 
     const financials = calculateTripEarnings(
@@ -170,39 +147,35 @@ export async function initiateMpesaPayment(req: AuthRequest, res: Response) {
       trip.platformFeePercent,
     );
 
-    const pendingTrip = await prisma.transportRequest.update({
-      where: { id: tripId },
-      data: {
-        paymentMethod: "MPESA",
-        paymentStatus: "PENDING",
-        status: "PAYMENT_PENDING",
-        platformFeeAmount: financials.platformFeeAmount,
-        driverNetEarning: financials.driverNetEarning,
-        mpesaCheckoutRequestId: `SIM-${Date.now()}-${trip.id}`,
-      },
-      include: buildTripInclude(),
-    });
+     const pendingTrip = await prisma.transportRequest.update({
+       where: { id: tripId },
+       data: {
+         paymentMethod: "MPESA",
+         paymentStatus: "PENDING",
+         status: "COMPLETED_PENDING_CONFIRMATION",
+         platformFeeAmount: financials.platformFeeAmount,
+         driverNetEarning: financials.driverNetEarning,
+         mpesaCheckoutRequestId: `SIM-${Date.now()}-${trip.id}`,
+       },
+       include: buildTripInclude(),
+     });
 
     emitTripUpdated(req, pendingTrip);
 
-    const shouldSimulateSuccess =
-      process.env.MPESA_SIMULATE === "true" ||
-      !process.env.MPESA_CONSUMER_KEY ||
-      !process.env.MPESA_CONSUMER_SECRET ||
-      !process.env.MPESA_SHORTCODE ||
-      !process.env.MPESA_PASSKEY;
+    const simulate =
+      process.env.MPESA_SIMULATE === "true" || !process.env.MPESA_CONSUMER_KEY;
 
-    if (shouldSimulateSuccess) {
+    if (simulate) {
       const completedTrip = await prisma.$transaction(async (tx) => {
-        const nextTrip = await tx.transportRequest.update({
-          where: { id: tripId },
-          data: {
-            paymentStatus: "PAID",
-            status: "DELIVERED",
-            paidAt: new Date(),
-            completedAt: new Date(),
-            mpesaReceiptNumber: `SIMRCPT${Date.now()}`,
-          },
+         const updated = await tx.transportRequest.update({
+           where: { id: tripId },
+           data: {
+             paymentStatus: "PAID",
+             status: "COMPLETED",
+             paidAt: new Date(),
+             completedAt: new Date(),
+             mpesaReceiptNumber: `SIM-${Date.now()}`,
+           },
           include: buildTripInclude(),
         });
 
@@ -213,20 +186,20 @@ export async function initiateMpesaPayment(req: AuthRequest, res: Response) {
           });
         }
 
-        return nextTrip;
+        return updated;
       });
 
       emitTripUpdated(req, completedTrip);
 
       return res.json({
-        message: "M-Pesa payment completed in simulation mode",
+        message: "MPESA simulated success",
         simulated: true,
         trip: completedTrip,
       });
     }
 
     return res.json({
-      message: "M-Pesa STK push initiated. Await callback confirmation.",
+      message: "MPESA STK push initiated (mock)",
       simulated: false,
       trip: pendingTrip,
     });
@@ -236,6 +209,8 @@ export async function initiateMpesaPayment(req: AuthRequest, res: Response) {
   }
 }
 
+// CASH CONFIRM
+
 export async function confirmCashPaymentByDriver(
   req: AuthRequest,
   res: Response,
@@ -244,50 +219,32 @@ export async function confirmCashPaymentByDriver(
     const userId = req.user?.id;
     const tripId = String(req.params.id || "");
 
-    if (!userId) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
     const driver = await prisma.driverProfile.findUnique({
       where: { userId },
       select: { id: true },
     });
 
-    if (!driver) {
-      return res.status(404).json({ message: "Driver profile not found" });
-    }
+    if (!driver) return res.status(404).json({ message: "No driver profile" });
 
     const trip = await prisma.transportRequest.findUnique({
       where: { id: tripId },
       include: buildTripInclude(),
     });
 
-    if (!trip) {
-      return res.status(404).json({ message: "Trip not found" });
-    }
+    if (!trip) return res.status(404).json({ message: "Trip not found" });
 
     if (trip.assignedDriverId !== driver.id) {
-      return res.status(403).json({
-        message: "You can only confirm cash for your own assigned trip",
-      });
-    }
-
-    if (trip.status !== "PAYMENT_PENDING") {
-      return res.status(400).json({
-        message: "Trip is not waiting for payment confirmation",
-      });
+      return res.status(403).json({ message: "Not your trip" });
     }
 
     if (trip.paymentMethod !== "CASH") {
-      return res.status(400).json({
-        message: "Cash confirmation only applies to cash payments",
-      });
+      return res.status(400).json({ message: "Not cash trip" });
     }
 
     if (trip.paymentStatus === "PAID") {
-      return res.status(400).json({
-        message: "This cash payment has already been confirmed",
-      });
+      return res.status(400).json({ message: "Already paid" });
     }
 
     const financials = calculateTripEarnings(
@@ -296,17 +253,17 @@ export async function confirmCashPaymentByDriver(
     );
 
     const completedTrip = await prisma.$transaction(async (tx) => {
-      const nextTrip = await tx.transportRequest.update({
-        where: { id: tripId },
-        data: {
-          paymentStatus: "PAID",
-          status: "DELIVERED",
-          cashConfirmedByDriver: true,
-          paidAt: new Date(),
-          completedAt: new Date(),
-          platformFeeAmount: financials.platformFeeAmount,
-          driverNetEarning: financials.driverNetEarning,
-        },
+         const updated = await tx.transportRequest.update({
+           where: { id: tripId },
+           data: {
+             paymentStatus: "PAID",
+             status: "COMPLETED",
+             cashConfirmedByDriver: true,
+             paidAt: new Date(),
+             completedAt: new Date(),
+             platformFeeAmount: financials.platformFeeAmount,
+             driverNetEarning: financials.driverNetEarning,
+           },
         include: buildTripInclude(),
       });
 
@@ -315,13 +272,13 @@ export async function confirmCashPaymentByDriver(
         data: { availability: "ONLINE" },
       });
 
-      return nextTrip;
+      return updated;
     });
 
     emitTripUpdated(req, completedTrip);
 
     return res.json({
-      message: "Cash payment confirmed and trip completed successfully",
+      message: "Cash confirmed",
       trip: completedTrip,
     });
   } catch (error) {
@@ -330,52 +287,37 @@ export async function confirmCashPaymentByDriver(
   }
 }
 
+// EARNINGS
+
 export async function getDriverEarningsSummary(
   req: AuthRequest,
   res: Response,
 ) {
   try {
     const userId = req.user?.id;
-
-    if (!userId) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
     const driver = await prisma.driverProfile.findUnique({
       where: { userId },
       select: { id: true },
     });
 
-    if (!driver) {
-      return res.status(404).json({ message: "Driver profile not found" });
-    }
+    if (!driver) return res.status(404).json({ message: "No driver" });
 
-    const deliveredTrips = await prisma.transportRequest.findMany({
-      where: {
-        assignedDriverId: driver.id,
-        status: "DELIVERED",
-        paymentStatus: "PAID",
-      },
-      orderBy: { updatedAt: "desc" },
-      select: {
-        id: true,
-        estimatedPrice: true,
-        driverNetEarning: true,
-        platformFeeAmount: true,
-        platformFeePercent: true,
-        paymentMethod: true,
-        paymentStatus: true,
-        updatedAt: true,
-        pickupAddress: true,
-        dropoffAddress: true,
-      },
-    });
+     const trips = await prisma.transportRequest.findMany({
+       where: {
+         assignedDriverId: driver.id,
+         status: "COMPLETED",
+         paymentStatus: "PAID",
+       },
+       orderBy: { updatedAt: "desc" },
+     });
 
-    const totals = deliveredTrips.reduce(
-      (acc, trip) => {
-        acc.gross += Number(trip.estimatedPrice || 0);
-        acc.net += Number(trip.driverNetEarning || 0);
-        acc.fees += Number(trip.platformFeeAmount || 0);
+    const totals = trips.reduce(
+      (acc, t) => {
+        acc.gross += Number(t.estimatedPrice || 0);
+        acc.net += Number(t.driverNetEarning || 0);
+        acc.fees += Number(t.platformFeeAmount || 0);
         return acc;
       },
       { gross: 0, net: 0, fees: 0 },
@@ -383,15 +325,13 @@ export async function getDriverEarningsSummary(
 
     return res.json({
       totals: {
-        gross: totals.gross,
-        net: totals.net,
-        fees: totals.fees,
-        tripCount: deliveredTrips.length,
+        ...totals,
+        tripCount: trips.length,
       },
-      trips: deliveredTrips,
+      trips,
     });
   } catch (error) {
-    console.error("getDriverEarningsSummary error:", error);
+    console.error("earnings error:", error);
     return res.status(500).json({ message: "Server error" });
   }
 }

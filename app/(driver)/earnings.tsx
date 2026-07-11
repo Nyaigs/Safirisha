@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect } from "react";
 import {
   ActivityIndicator,
   RefreshControl,
@@ -8,56 +8,20 @@ import {
   Text,
   View,
 } from "react-native";
-import { apiFetch } from "../../lib/api";
-
-type EarningsTrip = {
-  id: string;
-  estimatedPrice: number;
-  driverNetEarning: number;
-  platformFeeAmount: number;
-  platformFeePercent: number;
-  paymentMethod: string | null;
-  paymentStatus: string;
-  updatedAt: string;
-  pickupAddress: string;
-  dropoffAddress: string;
-};
-
-type EarningsResponse = {
-  totals: {
-    gross: number;
-    net: number;
-    fees: number;
-    tripCount: number;
-  };
-  trips: EarningsTrip[];
-};
+import { useEarningsStore } from "../../store/earnings";
 
 export default function DriverEarningsScreen() {
-  const [data, setData] = useState<EarningsResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-
-  const load = useCallback(async (mode: "initial" | "refresh" = "initial") => {
-    try {
-      if (mode === "initial") setLoading(true);
-      if (mode === "refresh") setRefreshing(true);
-
-      const response = await apiFetch("/payments/driver/earnings");
-      setData(response as EarningsResponse);
-    } catch (error: any) {
-      console.log("Failed to load earnings", error?.message || error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
+  const totals = useEarningsStore((s) => s.totals);
+  const trips = useEarningsStore((s) => s.trips);
+  const isLoading = useEarningsStore((s) => s.isLoading);
+  const isRefreshing = useEarningsStore((s) => s.isRefreshing);
+  const fetchEarnings = useEarningsStore((s) => s.fetchEarnings);
 
   useEffect(() => {
-    load("initial");
-  }, [load]);
+    fetchEarnings("initial");
+  }, [fetchEarnings]);
 
-  if (loading) {
+  if (isLoading) {
     return (
       <SafeAreaView style={styles.center}>
         <ActivityIndicator size="large" color="#111827" />
@@ -72,8 +36,8 @@ export default function DriverEarningsScreen() {
         contentContainerStyle={styles.content}
         refreshControl={
           <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => load("refresh")}
+            refreshing={isRefreshing}
+            onRefresh={() => fetchEarnings("refresh")}
           />
         }
       >
@@ -82,34 +46,34 @@ export default function DriverEarningsScreen() {
         <View style={styles.summaryCard}>
           <Text style={styles.summaryLabel}>Gross Collected</Text>
           <Text style={styles.summaryValue}>
-            KES {Number(data?.totals.gross || 0).toLocaleString()}
+            KES {Number(totals.gross || 0).toLocaleString()}
           </Text>
         </View>
 
         <View style={styles.summaryCard}>
           <Text style={styles.summaryLabel}>Safirisha Fees</Text>
           <Text style={styles.summaryValue}>
-            KES {Number(data?.totals.fees || 0).toLocaleString()}
+            KES {Number(totals.fees || 0).toLocaleString()}
           </Text>
         </View>
 
         <View style={styles.summaryCard}>
           <Text style={styles.summaryLabel}>Your Net Earnings</Text>
           <Text style={styles.summaryValue}>
-            KES {Number(data?.totals.net || 0).toLocaleString()}
+            KES {Number(totals.net || 0).toLocaleString()}
           </Text>
         </View>
 
         <View style={styles.summaryCard}>
           <Text style={styles.summaryLabel}>Completed Paid Trips</Text>
           <Text style={styles.summaryValue}>
-            {Number(data?.totals.tripCount || 0).toLocaleString()}
+            {Number(totals.tripCount || 0).toLocaleString()}
           </Text>
         </View>
 
         <Text style={styles.sectionTitle}>Recent Earnings</Text>
 
-        {(data?.trips || []).map((trip) => (
+        {trips.map((trip) => (
           <View key={trip.id} style={styles.tripCard}>
             <Text style={styles.tripFare}>
               Fare: KES {Number(trip.estimatedPrice || 0).toLocaleString()}
@@ -130,7 +94,7 @@ export default function DriverEarningsScreen() {
           </View>
         ))}
 
-        {!data?.trips?.length ? (
+        {!trips.length ? (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyText}>No paid completed trips yet.</Text>
           </View>

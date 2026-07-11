@@ -55,25 +55,28 @@ export async function getAdminDashboard(req: AuthRequest, res: Response) {
       recentOrders,
     ] = await Promise.all([
       prisma.transportRequest.count(),
-      prisma.transportRequest.count({
-        where: {
-          status: {
-            in: [
-              "SEARCHING",
-              "ACCEPTED",
-              "DRIVER_EN_ROUTE",
-              "ARRIVED_PICKUP",
-              "PICKUP_CONFIRMED",
-              "IN_TRANSIT",
-              "ARRIVED_DROPOFF",
-              "DELIVERY_CONFIRMED",
-            ],
-          },
-        },
-      }),
-      prisma.transportRequest.count({
-        where: { status: "DELIVERED" },
-      }),
+       prisma.transportRequest.count({
+         where: {
+           status: {
+             in: [
+               "REQUESTING",
+               "SEARCHING",
+               "SEARCHING_DRIVER",
+               "ACCEPTED",
+               "DRIVER_ASSIGNED",
+               "DRIVER_EN_ROUTE",
+               "ARRIVED_PICKUP",
+               "PICKUP_CONFIRMED",
+               "IN_TRANSIT",
+               "ARRIVED_DROPOFF",
+               "DELIVERY_CONFIRMED",
+             ],
+           },
+         },
+       }),
+       prisma.transportRequest.count({
+         where: { status: "COMPLETED" },
+       }),
       prisma.transportRequest.count({
         where: { status: "CANCELLED" },
       }),
@@ -108,14 +111,14 @@ export async function getAdminDashboard(req: AuthRequest, res: Response) {
       prisma.user.count({
         where: { isActive: false },
       }),
-      prisma.transportRequest.aggregate({
-        _sum: {
-          estimatedPrice: true,
-        },
-        where: {
-          status: "DELIVERED",
-        },
-      }),
+       prisma.transportRequest.aggregate({
+         _sum: {
+           estimatedPrice: true,
+         },
+         where: {
+           status: "COMPLETED",
+         },
+       }),
       prisma.transportRequest.findMany({
         take: 8,
         orderBy: { createdAt: "desc" },

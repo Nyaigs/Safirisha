@@ -15,6 +15,16 @@ type LiveDriver = {
   plateNumber?: string | null;
 };
 
+type DriverLocationPayload = {
+  id: string;
+  name?: string;
+  currentLat: number;
+  currentLng: number;
+  availability?: string;
+  vehicleType?: string;
+  plateNumber?: string;
+};
+
 const NAIROBI_REGION = {
   latitude: -1.2921,
   longitude: 36.8219,
@@ -27,62 +37,76 @@ export default function AdminLiveMapScreen() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let isMounted = true;
+
     const fetchDrivers = async () => {
       try {
         const res = await apiFetch("/admin/drivers/live");
+
+        if (!isMounted) return;
+
         setDrivers(Array.isArray(res?.drivers) ? res.drivers : []);
       } catch (error) {
         console.log("Failed to load live drivers:", error);
-        setDrivers([]);
+        if (isMounted) setDrivers([]);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
 
     fetchDrivers();
 
-    const unsubscribe = subscribeToDriverLocationUpdated((payload) => {
-      const lat =
-        typeof payload.currentLat === "number" ? payload.currentLat : null;
-      const lng =
-        typeof payload.currentLng === "number" ? payload.currentLng : null;
+    const unsubscribe = subscribeToDriverLocationUpdated(
+      (payload: DriverLocationPayload) => {
+        const lat =
+          typeof payload.currentLat === "number" ? payload.currentLat : null;
+        const lng =
+          typeof payload.currentLng === "number" ? payload.currentLng : null;
 
-      if (lat == null || lng == null) return;
+        if (lat == null || lng == null) return;
 
-      setDrivers((prev) => {
-        const index = prev.findIndex((item) => item.id === payload.id);
+        setDrivers((prev) => {
+          const index = prev.findIndex((item) => item.id === payload.id);
 
-        if (index === -1) {
-          return [
-            ...prev,
-            {
-              id: payload.id,
-              name: payload.name || "Driver",
-              currentLat: lat,
-              currentLng: lng,
-              availability: payload.availability || null,
-              vehicleType: payload.vehicleType || null,
-              plateNumber: payload.plateNumber || null,
-            },
-          ];
-        }
+          // NEW DRIVER
+          if (index === -1) {
+            return [
+              ...prev,
+              {
+                id: payload.id,
+                name: payload.name || "Driver",
+                currentLat: lat,
+                currentLng: lng,
+                availability: payload.availability || null,
+                vehicleType: payload.vehicleType || null,
+                plateNumber: payload.plateNumber || null,
+              },
+            ];
+          }
 
-        const updated = [...prev];
-        updated[index] = {
-          ...updated[index],
-          name: payload.name || updated[index].name,
-          currentLat: lat,
-          currentLng: lng,
-          availability: payload.availability || updated[index].availability,
-          vehicleType: payload.vehicleType || updated[index].vehicleType,
-          plateNumber: payload.plateNumber || updated[index].plateNumber,
-        };
+          // UPDATE DRIVER
+          const updated = [...prev];
 
-        return updated;
-      });
-    });
+          updated[index] = {
+            ...updated[index],
+            name: payload.name || updated[index].name,
+            currentLat: lat,
+            currentLng: lng,
+            availability: payload.availability ?? updated[index].availability,
+            vehicleType: payload.vehicleType ?? updated[index].vehicleType,
+            plateNumber: payload.plateNumber ?? updated[index].plateNumber,
+          };
 
-    return unsubscribe;
+          return updated;
+        });
+      },
+    );
+
+    // ✅ CLEANUP FIX (this is what React expects)
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, []);
 
   const onlineDrivers = useMemo(
@@ -142,12 +166,9 @@ export default function AdminLiveMapScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  map: {
-    flex: 1,
-  },
+  container: { flex: 1 },
+  map: { flex: 1 },
+
   center: {
     flex: 1,
     backgroundColor: "#fff",
@@ -155,11 +176,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 24,
   },
+
   loadingText: {
     marginTop: 10,
     color: "#475569",
     fontWeight: "600",
   },
+
   overlay: {
     position: "absolute",
     top: 56,
@@ -169,16 +192,19 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     padding: 14,
   },
+
   overlayTitle: {
     color: "#fff",
     fontSize: 16,
     fontWeight: "900",
   },
+
   overlayText: {
     color: "#cbd5e1",
     marginTop: 4,
     fontWeight: "600",
   },
+
   emptyFloat: {
     position: "absolute",
     bottom: 24,
@@ -190,12 +216,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#e5e7eb",
   },
+
   emptyFloatTitle: {
     color: "#111827",
     fontSize: 15,
     fontWeight: "900",
     marginBottom: 4,
   },
+
   emptyFloatText: {
     color: "#64748b",
     lineHeight: 20,

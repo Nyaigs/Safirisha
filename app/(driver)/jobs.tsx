@@ -1,5 +1,6 @@
-import { router } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -13,656 +14,465 @@ import {
 import { apiFetch } from "../../lib/api";
 import { connectSocket } from "../../lib/socket";
 import { useAuthStore } from "../../store/auth";
-import { Trip } from "../../types/trip";
 import {
-  haversineKm,
-  isValidCoordinate,
-  toNumber,
-} from "../../utils/validators";
+  Trip,
+  TripAcceptedPayload,
+  TripExpiredPayload,
+  TripStatusUpdatedPayload,
+  TripUpdatedPayload,
+} from "../../types/trip";
 
-const MAX_DISTANCE_KM = 20;
+const AUTO_REFRESH_INTERVAL_MS = 8000;
 
-type DriverProfileLite = {
-  id?: string;
-  availability?: "OFFLINE" | "ONLINE" | "BUSY";
-  vehicleType?: string | null;
-  plateNumber?: string | null;
-  currentLat?: number | null;
-  currentLng?: number | null;
-  currentHeading?: number | null;
-  currentSpeed?: number | null;
-  lastLocationAt?: string | null;
-  vehicleImageUrl?: string | null;
-  ownershipProofUrl?: string | null;
-  approvalStatus?: string | null;
-};
-
-type TripWithDistance = Trip & {
+type DriverJob = Trip & {
   distanceToPickupKm: number;
-  pickupAddress: string;
-  dropoffAddress: string;
-  estimatedPrice: number;
-  loadDescription: string;
-  loadSize: string;
-  vehicleType: string;
-  distanceKm: number;
 };
 
-function normalizeVehicleType(value?: string | null) {
+function normalizeVehicle(value?: string | null) {
   return String(value || "")
     .trim()
-    .toLowerCase()
-    .replace(/\s+/g, "");
+    .toLowerCase();
 }
 
-function sortJobsByDistance(list: TripWithDistance[]) {
-  return [...list].sort((a, b) => a.distanceToPickupKm - b.distanceToPickupKm);
+function getVehicleIcon(vehicle?: string | null) {
+  const normalized = normalizeVehicle(vehicle);
+
+  if (normalized.includes("tuk") || normalized.includes("rickshaw")) {
+    return "rickshaw-electric";
+  }
+
+  if (normalized.includes("pickup")) {
+    return "truck-pickup";
+  }
+
+  if (normalized.includes("lorry")) {
+    return "truck";
+  }
+
+  if (normalized.includes("truck")) {
+    return "truck-fast";
+  }
+
+  if (
+    normalized.includes("bike") ||
+    normalized.includes("boda") ||
+    normalized.includes("motor")
+  ) {
+    return "motorbike";
+  }
+
+  return "truck-fast";
+}
+
+function formatVehicleLabel(vehicle?: string | null) {
+  return String(vehicle || "Transport Vehicle").replace(/_/g, " ");
 }
 
 export default function DriverJobsScreen() {
   const user = useAuthStore((state) => state.user);
+  const driver = user?.driverProfile;
 
-  const driverProfile = (user?.driverProfile ??
-    null) as DriverProfileLite | null;
-  const availability = driverProfile?.availability ?? "OFFLINE";
-
-  const [jobs, setJobs] = useState<TripWithDistance[]>([]);
+  const [jobs, setJobs] = useState<DriverJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [acceptingTripId, setAcceptingTripId] = useState<string | null>(null);
-  const [locationReady, setLocationReady] = useState(false);
 
-  const driverStateRef = useRef({
-    lat: driverProfile?.currentLat ?? null,
-    lng: driverProfile?.currentLng ?? null,
-    vehicleType: driverProfile?.vehicleType ?? null,
-    availability,
-  });
+  const isMountedRef = useRef(true);
 
-  useEffect(() => {
-    driverStateRef.current = {
-      lat: driverProfile?.currentLat ?? null,
-      lng: driverProfile?.currentLng ?? null,
-      vehicleType: driverProfile?.vehicleType ?? null,
-      availability,
-    };
-  }, [
-    driverProfile?.currentLat,
-    driverProfile?.currentLng,
-    driverProfile?.vehicleType,
-    availability,
-  ]);
-
-  const updateAuthDriverProfile = useCallback(
-    (driver: DriverProfileLite | null) => {
-      if (!driver) return;
-
-      const state = useAuthStore.getState();
-      const authUser = state.user;
-
-      if (!authUser) return;
-
-      state.setUser({
-        ...authUser,
-        driverProfile: {
-          ...(authUser.driverProfile || {}),
-          id: driver.id ?? authUser.driverProfile?.id ?? "",
-          plateNumber:
-            driver.plateNumber ?? authUser.driverProfile?.plateNumber ?? "",
-          vehicleType:
-            driver.vehicleType ?? authUser.driverProfile?.vehicleType ?? "",
-          availability:
-            driver.availability ?? authUser.driverProfile?.availability,
-          currentLat: driver.currentLat ?? null,
-          currentLng: driver.currentLng ?? null,
-          currentHeading: driver.currentHeading ?? null,
-          currentSpeed: driver.currentSpeed ?? null,
-          lastLocationAt: driver.lastLocationAt ?? null,
-          vehicleImageUrl: authUser.driverProfile?.vehicleImageUrl,
-          ownershipProofUrl: authUser.driverProfile?.ownershipProofUrl,
-          approvalStatus: authUser.driverProfile?.approvalStatus,
-        },
-      });
-    },
-    [],
-  );
-
-  const fetchFreshDriverProfile = useCallback(async () => {
-    try {
-      const data = await apiFetch("/drivers/me");
-      const driver = (data?.driver ?? null) as DriverProfileLite | null;
-
-      updateAuthDriverProfile(driver);
-
-      return driver;
-    } catch (error) {
-      console.log("Failed to refresh driver profile", error);
-      return null;
-    }
-  }, [updateAuthDriverProfile]);
-
-  const mapTrip = useCallback(
-    (
-      trip: Trip,
-      lat: number,
-      lng: number,
-      fallbackVehicleType?: string | null,
-    ): TripWithDistance => {
-      const rawPickupLat = toNumber((trip as any).pickupLat, NaN);
-      const rawPickupLng = toNumber((trip as any).pickupLng, NaN);
-
-      const distanceToPickupKm =
-        Number.isFinite(rawPickupLat) && Number.isFinite(rawPickupLng)
-          ? haversineKm(lat, lng, rawPickupLat, rawPickupLng)
-          : Number.MAX_SAFE_INTEGER;
-
-      return {
-        ...trip,
-        pickupAddress:
-          (trip as any).pickupAddress ??
-          (trip as any).pickupLocation ??
-          "Pickup not provided",
-        dropoffAddress:
-          (trip as any).dropoffAddress ??
-          (trip as any).dropoffLocation ??
-          "Drop-off not provided",
-        estimatedPrice: toNumber((trip as any).estimatedPrice, 0),
-        loadDescription: (trip as any).loadDescription ?? "General goods",
-        loadSize: (trip as any).loadSize ?? "Not set",
-        vehicleType:
-          (trip as any).vehicleType ??
-          fallbackVehicleType ??
-          "Transport Request",
-        distanceKm: toNumber((trip as any).distanceKm, 0),
-        distanceToPickupKm,
-      };
-    },
-    [],
-  );
+  const canViewJobs = useMemo(() => {
+    return driver?.availability === "ONLINE" || driver?.availability === "BUSY";
+  }, [driver?.availability]);
 
   const fetchJobs = useCallback(async () => {
     try {
-      let lat = driverStateRef.current.lat;
-      let lng = driverStateRef.current.lng;
-      let vehicleType = driverStateRef.current.vehicleType;
+      const data = await apiFetch("/drivers/me/nearby-trips");
+      const trips: DriverJob[] = Array.isArray(data?.trips) ? data.trips : [];
+      setJobs(trips);
+    } catch (error: any) {
+      const message =
+        error?.message || "Failed to load nearby jobs for this driver.";
 
-      if (!isValidCoordinate(lat) || !isValidCoordinate(lng)) {
-        const freshDriver = await fetchFreshDriverProfile();
-        lat = freshDriver?.currentLat ?? null;
-        lng = freshDriver?.currentLng ?? null;
-        vehicleType = freshDriver?.vehicleType ?? vehicleType ?? null;
-      }
-
-      const hasLocation = isValidCoordinate(lat) && isValidCoordinate(lng);
-      setLocationReady(hasLocation);
-
-      if (!hasLocation) {
+      if (
+        typeof message === "string" &&
+        (message.includes("Go online first") ||
+          message.includes("location not set") ||
+          message.includes("Complete driver KYC") ||
+          message.includes("not approved yet") ||
+          message.includes("active trip"))
+      ) {
         setJobs([]);
         return;
       }
 
-      const data = await apiFetch("/drivers/me/nearby-trips");
-      const trips: Trip[] = Array.isArray(data?.trips) ? data.trips : [];
-
-      const normalizedDriverVehicle = normalizeVehicleType(vehicleType);
-
-      const nearbyJobs = trips
-        .map((trip) => mapTrip(trip, lat as number, lng as number, vehicleType))
-        .filter((trip) => trip.distanceToPickupKm <= MAX_DISTANCE_KM)
-        .filter((trip) => {
-          const normalizedTripVehicle = normalizeVehicleType(trip.vehicleType);
-
-          if (!normalizedDriverVehicle || !normalizedTripVehicle) {
-            return true;
-          }
-
-          return normalizedTripVehicle === normalizedDriverVehicle;
-        });
-
-      setJobs(sortJobsByDistance(nearbyJobs));
-    } catch (error: any) {
-      console.log("Failed to load jobs", error);
-      setJobs([]);
-      Alert.alert(
-        "Failed to load jobs",
-        error?.message || "Something went wrong while loading nearby jobs.",
-      );
+      Alert.alert("Jobs unavailable", message);
     }
-  }, [fetchFreshDriverProfile, mapTrip]);
+  }, []);
+
+  const fetchActiveTripAndRedirect = useCallback(async () => {
+    try {
+      const data = await apiFetch("/drivers/me/active-trip");
+      const trip = data?.trip ?? null;
+
+      if (trip?.id) {
+        router.replace({
+          pathname: "/(driver)/active-trip",
+          params: { tripId: trip.id },
+        });
+      }
+    } catch (error) {
+      console.log("Failed to fetch driver active trip", error);
+    }
+  }, []);
+
+  const refreshAll = useCallback(async () => {
+    await Promise.allSettled([fetchJobs(), fetchActiveTripAndRedirect()]);
+  }, [fetchJobs, fetchActiveTripAndRedirect]);
+
+  const onRefresh = useCallback(async () => {
+    try {
+      setRefreshing(true);
+      await refreshAll();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshAll]);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshAll();
+    }, [refreshAll]),
+  );
 
   useEffect(() => {
-    let isMounted = true;
+    isMountedRef.current = true;
 
-    fetchJobs().finally(() => {
-      if (isMounted) {
+    refreshAll().finally(() => {
+      if (isMountedRef.current) {
         setLoading(false);
       }
     });
 
     return () => {
-      isMounted = false;
+      isMountedRef.current = false;
     };
-  }, [fetchJobs]);
+  }, [refreshAll]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      refreshAll();
+    }, AUTO_REFRESH_INTERVAL_MS);
+
+    return () => clearInterval(interval);
+  }, [refreshAll]);
 
   useEffect(() => {
     const socket = connectSocket();
 
-    const onNewTripCreated = (trip: Trip) => {
-      const { lat, lng, vehicleType } = driverStateRef.current;
-
-      if (!isValidCoordinate(lat) || !isValidCoordinate(lng)) {
-        return;
-      }
-
-      const incomingVehicleType = (trip as any).vehicleType ?? null;
-
-      if (
-        vehicleType &&
-        incomingVehicleType &&
-        normalizeVehicleType(incomingVehicleType) !==
-          normalizeVehicleType(vehicleType)
-      ) {
-        return;
-      }
-
-      const normalizedTrip = mapTrip(
-        trip,
-        lat as number,
-        lng as number,
-        vehicleType,
-      );
-
-      if (normalizedTrip.distanceToPickupKm > MAX_DISTANCE_KM) {
-        return;
-      }
-
-      setJobs((prev) => {
-        const existingIndex = prev.findIndex(
-          (item) => item.id === normalizedTrip.id,
-        );
-
-        if (existingIndex >= 0) {
-          const updated = [...prev];
-          updated[existingIndex] = normalizedTrip;
-          return sortJobsByDistance(updated);
-        }
-
-        return sortJobsByDistance([normalizedTrip, ...prev]);
-      });
+    const refreshJobs = async () => {
+      await refreshAll();
     };
 
-    const onTripAccepted = (payload: { tripId?: string }) => {
-      if (!payload?.tripId) return;
-      setJobs((prev) => prev.filter((job) => job.id !== payload.tripId));
+    const onTripAccepted = async (payload: TripAcceptedPayload) => {
+      await refreshAll();
+
+      if (payload?.tripId) {
+        router.replace({
+          pathname: "/(driver)/active-trip",
+          params: { tripId: payload.tripId },
+        });
+      }
     };
 
-    socket.on("new_trip_created", onNewTripCreated);
+    const onTripUpdated = async (payload: TripUpdatedPayload) => {
+      const trip = payload?.trip;
+
+      if (!trip) {
+        await refreshJobs();
+        return;
+      }
+
+      if (trip.assignedDriverId) {
+        await fetchActiveTripAndRedirect();
+      }
+
+      await refreshJobs();
+    };
+
+    const onTripStatusUpdated = async (_payload: TripStatusUpdatedPayload) => {
+      await refreshJobs();
+    };
+
+    const onTripExpired = async (_payload: TripExpiredPayload) => {
+      await refreshJobs();
+    };
+
+    socket.on("new_trip_created", refreshJobs);
     socket.on("trip_accepted", onTripAccepted);
+    socket.on("trip_updated", onTripUpdated);
+    socket.on("trip_status_updated", onTripStatusUpdated);
+    socket.on("trip_expired", onTripExpired);
 
     return () => {
-      socket.off("new_trip_created", onNewTripCreated);
+      socket.off("new_trip_created", refreshJobs);
       socket.off("trip_accepted", onTripAccepted);
+      socket.off("trip_updated", onTripUpdated);
+      socket.off("trip_status_updated", onTripStatusUpdated);
+      socket.off("trip_expired", onTripExpired);
     };
-  }, [mapTrip]);
+  }, [fetchActiveTripAndRedirect, refreshAll]);
 
-  const handleAccept = async (tripId: string) => {
-    if (availability === "BUSY") {
-      Alert.alert(
-        "Active trip in progress",
-        "Finish your current trip before accepting another job.",
-      );
-      return;
-    }
+  const handleAccept = useCallback(
+    async (tripId: string) => {
+      try {
+        setAcceptingTripId(tripId);
 
-    if (availability !== "ONLINE") {
-      Alert.alert(
-        "Go online first",
-        "You need to be online before accepting a job.",
-      );
-      return;
-    }
+        const data = await apiFetch(`/trips/${tripId}/accept`, {
+          method: "POST",
+        });
 
-    try {
-      setAcceptingTripId(tripId);
+        const acceptedTrip = data?.trip;
 
-      const data = await apiFetch(`/trips/${tripId}/accept`, {
-        method: "POST",
-      });
-
-      const acceptedTripId = data?.trip?.id ?? tripId;
-
-      setJobs((prev) => prev.filter((job) => job.id !== tripId));
-      await fetchJobs();
-
-      router.replace({
-        pathname: "/(driver)/active-trip",
-        params: { tripId: acceptedTripId },
-      });
-    } catch (error: any) {
-      console.log("Accept failed", error);
-      Alert.alert(
-        "Accept failed",
-        error?.message || "Could not accept this trip.",
-      );
-    } finally {
-      setAcceptingTripId(null);
-    }
-  };
-
-  const onRefresh = async () => {
-    try {
-      setRefreshing(true);
-      await fetchJobs();
-    } finally {
-      setRefreshing(false);
-    }
-  };
+        router.replace({
+          pathname: "/(driver)/active-trip",
+          params: { tripId: acceptedTrip?.id || tripId },
+        });
+      } catch (error: any) {
+        Alert.alert("Accept failed", error?.message || "Failed to accept job.");
+        await refreshAll();
+      } finally {
+        setAcceptingTripId(null);
+      }
+    },
+    [refreshAll],
+  );
 
   if (loading) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#111827" />
-        <Text style={styles.loadingText}>Loading nearby jobs...</Text>
+        <Text style={styles.loadingText}>Loading live jobs...</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Nearby Jobs</Text>
-      <Text style={styles.subtitle}>
-        Jobs close to your current location and vehicle type.
-      </Text>
-
-      <View
-        style={[
-          styles.availabilityPill,
-          availability === "ONLINE"
-            ? styles.availabilityOnline
-            : availability === "BUSY"
-              ? styles.availabilityBusy
-              : styles.availabilityOffline,
-        ]}
-      >
-        <Text
-          style={[
-            styles.availabilityText,
-            availability === "ONLINE"
-              ? styles.availabilityTextOnline
-              : availability === "BUSY"
-                ? styles.availabilityTextBusy
-                : styles.availabilityTextOffline,
-          ]}
-        >
-          Driver Status: {availability}
-        </Text>
-      </View>
-
-      {!locationReady ? (
-        <View style={styles.noticeCard}>
-          <Text style={styles.noticeTitle}>Location needed</Text>
-          <Text style={styles.noticeText}>
-            Your current driver location is not available yet. Go to the driver
-            dashboard, sync location, then reopen jobs.
+    <FlatList
+      style={styles.screen}
+      contentContainerStyle={styles.contentContainer}
+      data={jobs}
+      keyExtractor={(item) => item.id}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
+      ListHeaderComponent={
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Nearby Jobs</Text>
+          <Text style={styles.headerSub}>
+            {driver?.availability === "ONLINE"
+              ? "Fresh nearby requests matched to your vehicle and location."
+              : driver?.availability === "BUSY"
+                ? "You already have an active trip. New jobs are paused for now."
+                : "Go online to receive matched jobs in real time."}
           </Text>
         </View>
-      ) : null}
+      }
+      ListEmptyComponent={
+        <View style={styles.center}>
+          <Text style={styles.emptyTitle}>No jobs nearby right now</Text>
+          <Text style={styles.emptyText}>
+            Stay online, keep location syncing, and fresh matched jobs will land
+            here automatically.
+          </Text>
+        </View>
+      }
+      renderItem={({ item }) => {
+        const isAccepting = acceptingTripId === item.id;
+        const vehicleIcon = getVehicleIcon(item.vehicleType);
 
-      <FlatList
-        data={jobs}
-        keyExtractor={(item) => item.id}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        contentContainerStyle={{ paddingBottom: 24 }}
-        ListEmptyComponent={
-          <View style={styles.emptyWrap}>
-            <Text style={styles.emptyTitle}>No nearby jobs right now</Text>
-            <Text style={styles.emptyText}>
-              Stay online and refresh again. New requests will land here.
-            </Text>
-          </View>
-        }
-        renderItem={({ item }) => {
-          const accepting = acceptingTripId === item.id;
+        return (
+          <View style={styles.card}>
+            <View style={styles.cardTop}>
+              <View style={styles.cardIcon}>
+                <MaterialCommunityIcons
+                  name={vehicleIcon as any}
+                  size={24}
+                  color="#111827"
+                />
+              </View>
 
-          return (
-            <View style={styles.card}>
-              <View style={styles.cardTopRow}>
-                <Text style={styles.cardTitle}>
-                  {item.vehicleType} • {item.loadSize}
+              <View style={{ flex: 1 }}>
+                <Text style={styles.title}>
+                  {formatVehicleLabel(item.vehicleType)} • {item.loadSize}
                 </Text>
-
-                <View style={styles.distancePill}>
-                  <Text style={styles.distancePillText}>
-                    {item.distanceToPickupKm.toFixed(1)} km
-                  </Text>
-                </View>
+                <Text style={styles.subtitle}>
+                  ~{Number(item.distanceToPickupKm || 0).toFixed(1)} km away
+                </Text>
               </View>
 
-              <View style={styles.block}>
-                <Text style={styles.label}>Pickup</Text>
-                <Text style={styles.value}>{item.pickupAddress}</Text>
+              <View style={styles.priceBadge}>
+                <Text style={styles.priceBadgeText}>
+                  KES {Number(item.estimatedPrice ?? 0).toLocaleString()}
+                </Text>
               </View>
-
-              <View style={styles.block}>
-                <Text style={styles.label}>Drop-off</Text>
-                <Text style={styles.value}>{item.dropoffAddress}</Text>
-              </View>
-
-              <View style={styles.block}>
-                <Text style={styles.label}>Load</Text>
-                <Text style={styles.value}>{item.loadDescription}</Text>
-              </View>
-
-              <View style={styles.metaRow}>
-                <View style={styles.metaItem}>
-                  <Text style={styles.metaLabel}>Price</Text>
-                  <Text style={styles.metaValue}>
-                    KES {Number(item.estimatedPrice ?? 0).toLocaleString()}
-                  </Text>
-                </View>
-
-                <View style={styles.metaItem}>
-                  <Text style={styles.metaLabel}>Trip Distance</Text>
-                  <Text style={styles.metaValue}>{item.distanceKm} km</Text>
-                </View>
-              </View>
-
-              <TouchableOpacity
-                style={[
-                  styles.acceptBtn,
-                  accepting ? styles.acceptBtnDisabled : null,
-                ]}
-                onPress={() => handleAccept(item.id)}
-                disabled={accepting}
-              >
-                {accepting ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.acceptBtnText}>Accept Job</Text>
-                )}
-              </TouchableOpacity>
             </View>
-          );
-        }}
-      />
-    </View>
+
+            <Text style={styles.label}>Pickup</Text>
+            <Text style={styles.value}>{item.pickupAddress}</Text>
+
+            <Text style={styles.label}>Drop-off</Text>
+            <Text style={styles.value}>{item.dropoffAddress}</Text>
+
+            <Text style={styles.label}>Load</Text>
+            <Text style={styles.value}>
+              {item.loadDescription || "General goods"}
+            </Text>
+
+            <Text style={styles.label}>Trip Distance</Text>
+            <Text style={styles.value}>
+              {Number(item.distanceKm ?? 0).toFixed(1)} km
+            </Text>
+
+            <TouchableOpacity
+              style={[
+                styles.btn,
+                (isAccepting || !canViewJobs) && styles.btnDisabled,
+              ]}
+              onPress={() => handleAccept(item.id)}
+              disabled={isAccepting || !canViewJobs}
+            >
+              {isAccepting ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="flash-outline" size={18} color="#fff" />
+                  <Text style={styles.btnText}>Accept Job</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        );
+      }}
+    />
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  screen: {
     flex: 1,
-    backgroundColor: "#fff",
-    padding: 16,
-    paddingTop: 56,
+    backgroundColor: "#f8fafc",
+  },
+  contentContainer: {
+    padding: 12,
+    paddingBottom: 24,
+    flexGrow: 1,
+  },
+  header: {
+    marginBottom: 10,
+    paddingHorizontal: 4,
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: "900",
+    color: "#111827",
+    marginBottom: 4,
+  },
+  headerSub: {
+    color: "#6b7280",
+    lineHeight: 20,
   },
   center: {
     flex: 1,
-    backgroundColor: "#fff",
-    alignItems: "center",
+    minHeight: 280,
     justifyContent: "center",
-    padding: 24,
+    alignItems: "center",
+    paddingHorizontal: 24,
   },
   loadingText: {
     marginTop: 10,
     color: "#374151",
     fontWeight: "600",
   },
-  title: {
-    fontSize: 26,
-    fontWeight: "800",
-    color: "#111827",
-  },
-  subtitle: {
-    marginTop: 6,
-    color: "#6b7280",
-    marginBottom: 14,
-  },
-  availabilityPill: {
-    alignSelf: "flex-start",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    marginBottom: 14,
-  },
-  availabilityOnline: {
-    backgroundColor: "#dcfce7",
-  },
-  availabilityBusy: {
-    backgroundColor: "#dbeafe",
-  },
-  availabilityOffline: {
-    backgroundColor: "#fee2e2",
-  },
-  availabilityText: {
-    fontWeight: "700",
-  },
-  availabilityTextOnline: {
-    color: "#166534",
-  },
-  availabilityTextBusy: {
-    color: "#1d4ed8",
-  },
-  availabilityTextOffline: {
-    color: "#991b1b",
-  },
-  noticeCard: {
-    backgroundColor: "#fff7ed",
-    borderColor: "#fdba74",
-    borderWidth: 1,
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 14,
-  },
-  noticeTitle: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#9a3412",
-    marginBottom: 6,
-  },
-  noticeText: {
-    color: "#7c2d12",
-    lineHeight: 20,
-  },
-  emptyWrap: {
-    paddingVertical: 42,
-    alignItems: "center",
-  },
   emptyTitle: {
     fontSize: 18,
     fontWeight: "800",
     color: "#111827",
+    marginBottom: 8,
   },
   emptyText: {
-    marginTop: 8,
-    color: "#6b7280",
     textAlign: "center",
+    color: "#6b7280",
     lineHeight: 20,
   },
   card: {
-    backgroundColor: "#f9fafb",
-    borderRadius: 20,
     padding: 16,
+    marginBottom: 12,
+    backgroundColor: "#ffffff",
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: "#e5e7eb",
-    marginBottom: 14,
   },
-  cardTopRow: {
+  cardTop: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
+    marginBottom: 10,
+    gap: 10,
   },
-  cardTitle: {
+  cardIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: "#f3f4f6",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  title: {
+    fontWeight: "900",
     fontSize: 16,
-    fontWeight: "800",
     color: "#111827",
-    flex: 1,
-    marginRight: 12,
   },
-  distancePill: {
-    backgroundColor: "#dbeafe",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+  subtitle: {
+    color: "#6b7280",
+    marginTop: 4,
+  },
+  priceBadge: {
+    backgroundColor: "#111827",
     borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
   },
-  distancePillText: {
-    color: "#1d4ed8",
-    fontWeight: "700",
-  },
-  block: {
-    marginTop: 12,
+  priceBadgeText: {
+    color: "#ffffff",
+    fontWeight: "800",
+    fontSize: 12,
   },
   label: {
     fontSize: 12,
-    textTransform: "uppercase",
+    fontWeight: "800",
     color: "#6b7280",
-    fontWeight: "700",
-    marginBottom: 4,
+    marginTop: 8,
+    textTransform: "uppercase",
   },
   value: {
-    fontSize: 15,
-    color: "#111827",
-    fontWeight: "600",
-  },
-  metaRow: {
-    flexDirection: "row",
-    gap: 12,
-    marginTop: 14,
-  },
-  metaItem: {
-    flex: 1,
-    backgroundColor: "#fff",
-    borderRadius: 14,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-  },
-  metaLabel: {
-    fontSize: 12,
-    color: "#6b7280",
-    fontWeight: "700",
-    marginBottom: 4,
-  },
-  metaValue: {
     fontSize: 14,
     color: "#111827",
-    fontWeight: "700",
+    marginTop: 2,
+    lineHeight: 20,
   },
-  acceptBtn: {
-    marginTop: 16,
+  btn: {
+    marginTop: 14,
     backgroundColor: "#111827",
+    paddingVertical: 13,
     borderRadius: 14,
-    paddingVertical: 14,
     alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
   },
-  acceptBtnDisabled: {
+  btnDisabled: {
     opacity: 0.7,
   },
-  acceptBtnText: {
-    color: "#fff",
-    fontSize: 15,
+  btnText: {
+    color: "#ffffff",
     fontWeight: "800",
   },
 });

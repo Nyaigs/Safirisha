@@ -427,56 +427,84 @@ export async function getMe(req: AuthRequest, res: Response) {
 export async function updateMe(req: AuthRequest, res: Response) {
   try {
     const userId = req.user?.id;
-    const { fullName, username, email, phone } = req.body;
 
     if (!userId) {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    if (!fullName || !username || !email || !phone) {
+    const { fullName, username, email, phone } = req.body;
+
+    const updateData: Record<string, unknown> = {};
+
+    if (fullName !== undefined) {
+      if (typeof fullName !== "string" || !fullName.trim()) {
+        return res.status(400).json({
+          message: "Full name must be a non-empty string",
+        });
+      }
+      updateData.fullName = fullName.trim();
+    }
+
+    if (username !== undefined) {
+      const normalizedUsername = normalizeUsername(username);
+      if (!isValidUsername(normalizedUsername)) {
+        return res.status(400).json({
+          message:
+            "Username must be 3-20 characters and only use letters, numbers, underscore or dot",
+        });
+      }
+      updateData.username = normalizedUsername;
+    }
+
+    if (email !== undefined) {
+      updateData.email = String(email).trim().toLowerCase();
+    }
+
+    if (phone !== undefined) {
+      updateData.phone = String(phone).trim();
+    }
+
+    if (Object.keys(updateData).length === 0) {
       return res.status(400).json({
-        message: "Full name, username, email and phone are required",
+        message: "At least one field to update is required",
       });
     }
 
-    const normalizedUsername = normalizeUsername(username);
+    const hasUniqueField =
+      updateData.email || updateData.phone || updateData.username;
+    if (hasUniqueField) {
+      const orConditions: Record<string, unknown>[] = [];
+      if (updateData.email) {
+        orConditions.push({ email: updateData.email as string });
+      }
+      if (updateData.phone) {
+        orConditions.push({ phone: updateData.phone as string });
+      }
+      if (updateData.username) {
+        orConditions.push({ username: updateData.username as string });
+      }
 
-    if (!isValidUsername(normalizedUsername)) {
-      return res.status(400).json({
-        message:
-          "Username must be 3-20 characters and only use letters, numbers, underscore or dot",
-      });
-    }
-
-    const existingUser = await prisma.user.findFirst({
-      where: {
-        AND: [
-          { id: { not: userId } },
-          {
-            OR: [
-              { email: String(email).trim().toLowerCase() },
-              { phone: String(phone).trim() },
-              { username: normalizedUsername },
+      if (orConditions.length > 0) {
+        const existingUser = await prisma.user.findFirst({
+          where: {
+            AND: [
+              { id: { not: userId } },
+              { OR: orConditions },
             ],
           },
-        ],
-      },
-    });
+        });
 
-    if (existingUser) {
-      return res.status(409).json({
-        message: "Username, email or phone already exists",
-      });
+        if (existingUser) {
+          return res.status(409).json({
+            message: "Username, email or phone already exists",
+          });
+        }
+      }
     }
 
     const updatedUser = await prisma.user.update({
       where: { id: userId },
-      data: {
-        fullName: String(fullName).trim(),
-        username: normalizedUsername,
-        email: String(email).trim().toLowerCase(),
-        phone: String(phone).trim(),
-      },
+      data: updateData,
       include: {
         driverProfile: true,
       },

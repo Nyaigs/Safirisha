@@ -1,181 +1,129 @@
 import { io, Socket } from "socket.io-client";
-import { getBestAccessTokenSync } from "./auth-token";
 import { SOCKET_BASE_URL } from "./config";
+import type {
+  TripAcceptedPayload,
+  TripUpdatedPayload,
+  TripStatusUpdatedPayload,
+  TripExpiredPayload,
+  DriverLocationUpdatedPayload,
+} from "../types/trip";
 
-let socketInstance: Socket | null = null;
+let socket: Socket | null = null;
+let connectCount = 0;
+let tokenProvider: (() => string | null) | null = null;
 
-function getLatestToken(): string | null {
-  return getBestAccessTokenSync();
+export function setTokenProvider(fn: (() => string | null) | null) {
+  tokenProvider = fn;
 }
 
-function buildSocket(): Socket {
-  const socket = io(SOCKET_BASE_URL, {
+function getToken() {
+  return tokenProvider ? tokenProvider() : null;
+}
+
+function createSocket() {
+  return io(SOCKET_BASE_URL, {
     transports: ["websocket"],
     autoConnect: false,
-    auth: {
-      token: getLatestToken(),
-    },
+    auth: { token: getToken() },
     reconnection: true,
     reconnectionAttempts: Infinity,
     reconnectionDelay: 1000,
     reconnectionDelayMax: 5000,
   });
+}
 
+export function getSocket() {
+  if (!socket) socket = createSocket();
   return socket;
 }
 
-function attachBaseListeners(socket: Socket) {
-  socket.on("connect", () => {
-    console.log("Socket connected:", socket.id);
-  });
-
-  socket.on("disconnect", (reason) => {
-    console.log("Socket disconnected:", reason);
-  });
-
-  socket.on("connect_error", (error) => {
-    console.log("Socket connect error:", error?.message);
-  });
-}
-
-export function getSocket(): Socket {
-  const latestToken = getLatestToken();
-
-  if (!socketInstance) {
-    socketInstance = buildSocket();
-    attachBaseListeners(socketInstance);
+export function connectSocket() {
+  const s = getSocket();
+  s.auth = { token: getToken() };
+  if (!s.connected) {
+    s.connect();
   }
-
-  socketInstance.auth = { token: latestToken };
-
-  return socketInstance;
-}
-
-export function connectSocket(): Socket {
-  const socket = getSocket();
-
-  socket.auth = { token: getLatestToken() };
-
-  if (!socket.connected) {
-    socket.connect();
-  }
-
-  return socket;
+  connectCount++;
+  return s;
 }
 
 export function disconnectSocket() {
-  if (!socketInstance) return;
+  if (!socket) return;
+  socket.removeAllListeners();
+  socket.disconnect();
+  socket = null;
+  connectCount = 0;
+}
 
-  socketInstance.removeAllListeners();
-  socketInstance.disconnect();
-  socketInstance = null;
+export function subscribe(event: string, handler: (...args: any[]) => void) {
+  const s = connectSocket();
+  s.on(event, handler);
+  return () => { s.off(event, handler); };
 }
 
 export function joinTripRoom(tripId: string) {
-  const socket = connectSocket();
-  socket.emit("join_trip_room", tripId);
+  const s = getSocket();
+  if (s.connected) s.emit("join_trip_room", tripId);
 }
 
 export function leaveTripRoom(tripId: string) {
-  if (!socketInstance) return;
-  socketInstance.emit("leave_trip_room", tripId);
+  const s = getSocket();
+  if (s.connected) s.emit("leave_trip_room", tripId);
 }
 
-export function reconnectSocketWithLatestToken(): Socket {
-  disconnectSocket();
-  return connectSocket();
+export function subscribeToDriverLocationUpdated(handler: (payload: any) => void) {
+  return subscribe("driver_location_updated", handler);
 }
 
-export function subscribeToAdminStats(handler: () => void) {
-  const socket = connectSocket();
-  socket.on("admin_stats_updated", handler);
-
-  return () => {
-    socket.off("admin_stats_updated", handler);
-  };
+export function emitDriverOnline() {
+  const s = connectSocket();
+  s.emit("driver:online");
 }
 
-export function subscribeToDriverLocationUpdated(
-  handler: (payload: {
-    id: string;
-    driverId?: string;
-    tripId?: string;
-    name?: string;
-    currentLat?: number | null;
-    currentLng?: number | null;
-    lat?: number | null;
-    lng?: number | null;
-    heading?: number | null;
-    speed?: number | null;
-    updatedAt?: string;
-    availability?: string | null;
-    vehicleType?: string | null;
-    plateNumber?: string | null;
-    isActive?: boolean;
-  }) => void,
-) {
-  const socket = connectSocket();
-  socket.on("driver_location_updated", handler);
-
-  return () => {
-    socket.off("driver_location_updated", handler);
-  };
+export function emitDriverOffline() {
+  const s = getSocket();
+  if (s.connected) s.emit("driver:offline");
 }
 
-export function subscribeToNewTrips(handler: (payload: any) => void) {
-  const socket = connectSocket();
-  socket.on("new_trip_created", handler);
-
-  return () => {
-    socket.off("new_trip_created", handler);
-  };
+export function onTripAccepted(handler: (payload: TripAcceptedPayload) => void) {
+  return subscribe("trip_accepted", handler);
 }
 
-export function subscribeToTripAccepted(
-  handler: (payload: {
-    tripId: string;
-    status: string;
-    driver?: {
-      id: string;
-      name: string;
-      phone: string;
-      plateNumber: string;
-      vehicleType: string;
-    } | null;
-    trip?: any;
-  }) => void,
-) {
-  const socket = connectSocket();
-  socket.on("trip_accepted", handler);
-
-  return () => {
-    socket.off("trip_accepted", handler);
-  };
+export function onTripUpdated(handler: (payload: TripUpdatedPayload) => void) {
+  return subscribe("trip_updated", handler);
 }
 
-export function subscribeToTripUpdated(
-  handler: (payload: { trip: any }) => void,
-) {
-  const socket = connectSocket();
-  socket.on("trip_updated", handler);
-
-  return () => {
-    socket.off("trip_updated", handler);
-  };
+export function onTripStatusUpdated(handler: (payload: TripStatusUpdatedPayload) => void) {
+  return subscribe("trip_status_updated", handler);
 }
 
-export function subscribeToTripStatusUpdated(
-  handler: (payload: {
-    tripId: string;
-    status: string;
-    paymentMethod?: string | null;
-    paymentStatus?: string | null;
-  }) => void,
-) {
-  const socket = connectSocket();
-  socket.on("trip_status_updated", handler);
+export function onTripExpired(handler: (payload: TripExpiredPayload) => void) {
+  return subscribe("trip_expired", handler);
+}
 
-  return () => {
-    socket.off("trip_status_updated", handler);
-  };
+export function onDriverLocationUpdated(handler: (payload: DriverLocationUpdatedPayload) => void) {
+  return subscribe("driver_location_updated", handler);
+}
+
+export function onDriverAvailabilityUpdated(handler: (payload: { driverId: string; availability: string }) => void) {
+  return subscribe("driver_availability_updated", handler);
+}
+
+export function onNewTripCreated(handler: (...args: any[]) => void) {
+  return subscribe("new_trip_created", handler);
+}
+
+export function reconnectSocketWithLatestToken() {
+  if (socket) {
+    socket.disconnect();
+    socket = null;
+  }
+  connectCount = 0;
+  connectSocket();
+}
+
+export function refreshSocketToken() {
+  if (socket && socket.connected) {
+    socket.auth = { token: getToken() };
+  }
 }

@@ -12,10 +12,18 @@ import {
 function getVehicleIcon(vehicle?: string) {
   const normalized = (vehicle || "").toLowerCase();
 
-  if (normalized.includes("tuk")) return "rickshaw";
-  if (normalized.includes("pickup")) return "truck-pickup";
+  if (normalized.includes("tuk")) return "rickshaw-electric";
+  if (normalized.includes("pickup")) return "truck-cargo-container";
   if (normalized.includes("lorry")) return "truck";
-  if (normalized.includes("truck")) return "truck";
+  if (normalized.includes("truck")) return "truck-fast";
+  if (
+    normalized.includes("bike") ||
+    normalized.includes("boda") ||
+    normalized.includes("motor")
+  ) {
+    return "motorbike";
+  }
+
   return "truck-fast";
 }
 
@@ -85,7 +93,7 @@ export default function DriverFoundScreen() {
       if (!supported) return;
       await Linking.openURL(url);
     } catch {
-      // keep silent here to avoid over-alerting
+      // silent
     }
   };
 
@@ -123,9 +131,9 @@ export default function DriverFoundScreen() {
           </TouchableOpacity>
 
           <View style={styles.headerTextWrap}>
-            <Text style={styles.title}>Transporter Assigned</Text>
+            <Text style={styles.title}>Driver assigned</Text>
             <Text style={styles.subtitle}>
-              Your request has been accepted and live trip tracking is now
+              Nice. A nearby driver accepted your request and live tracking is
               ready.
             </Text>
           </View>
@@ -134,7 +142,7 @@ export default function DriverFoundScreen() {
         <View style={styles.heroCard}>
           <View style={styles.statusBadge}>
             <Ionicons name="checkmark-circle" size={18} color="#16a34a" />
-            <Text style={styles.statusText}>Driver Found</Text>
+            <Text style={styles.statusText}>Matched Successfully</Text>
           </View>
 
           <View style={styles.heroVehicleWrap}>
@@ -157,9 +165,8 @@ export default function DriverFoundScreen() {
           </View>
 
           <Text style={styles.heroText}>
-            Your transporter has accepted the request. You can now follow the
-            trip live, see status changes, and confirm key delivery steps as the
-            trip progresses.
+            We found the closest suitable driver and assigned your request. You
+            can now track the trip live and follow every major status update.
           </Text>
         </View>
 
@@ -263,8 +270,8 @@ export default function DriverFoundScreen() {
             color="#1d4ed8"
           />
           <Text style={styles.noticeText}>
-            In the live trip screen, you’ll be able to track progress and later
-            confirm pickup handover and delivery receipt at the right stages.
+            Next up: open live tracking to see where your driver is, follow trip
+            progress, and confirm pickup and delivery at the correct stages.
           </Text>
         </View>
 

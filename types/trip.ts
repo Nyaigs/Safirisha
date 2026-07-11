@@ -18,6 +18,7 @@ export type DriverAvailability = "OFFLINE" | "ONLINE" | "BUSY";
 
 export type AssignedDriver = {
   id: string;
+  userId?: string;
   plateNumber: string;
   vehicleType: string;
   currentLat?: number | null;
@@ -59,6 +60,13 @@ export type Trip = {
   estimatedPrice: number;
   distanceKm: number;
   status: TripStatus;
+
+  expiresAt?: string | null;
+  acceptedAt?: string | null;
+  cancelledAt?: string | null;
+  expiredAt?: string | null;
+  searchStartedAt?: string | null;
+
   paymentMethod?: PaymentMethod | null;
   paymentStatus?: PaymentStatus | null;
   platformFeePercent?: number;
@@ -68,11 +76,16 @@ export type Trip = {
   completedAt?: string | null;
   cashConfirmedByDriver?: boolean;
   mpesaReceiptNumber?: string | null;
+
   createdAt: string;
   updatedAt: string;
+
   assignedDriver?: AssignedDriver | null;
   customer?: TripCustomer | null;
   distanceToPickupKm?: number;
+
+  freshnessScore?: number;
+  rankingScore?: number;
 };
 
 export type DriverLiveLocation = {
@@ -105,6 +118,12 @@ export type TripStatusUpdatedPayload = {
   status: TripStatus;
   paymentMethod?: PaymentMethod | null;
   paymentStatus?: PaymentStatus | null;
+};
+
+export type TripExpiredPayload = {
+  tripId: string;
+  status: TripStatus;
+  trip?: Trip;
 };
 
 export type DriverLocationUpdatedPayload = {

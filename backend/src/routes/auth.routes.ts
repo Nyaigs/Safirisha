@@ -21,6 +21,7 @@ router.post("/register/customer", registerCustomer);
 router.post("/register/driver", registerDriver);
 router.post("/login", login);
 
+//Now valid
 router.post("/clerk/bootstrap", authenticateIdentity, clerkBootstrap);
 
 router.post("/forgot-password", requestPasswordReset);

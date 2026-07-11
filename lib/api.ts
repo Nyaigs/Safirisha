@@ -1,4 +1,3 @@
-import { useAuthStore } from "../store/auth";
 import { getBestAccessToken } from "./auth-token";
 import { API_BASE_URL, API_TIMEOUT } from "./config";
 import { disconnectSocket } from "./socket";
@@ -29,6 +28,12 @@ function isAuthErrorMessage(message: string) {
   );
 }
 
+let cachedLogout: (() => void) | null = null;
+
+export function setLogoutHandler(fn: (() => void) | null) {
+  cachedLogout = fn;
+}
+
 function clearBrokenSession() {
   try {
     disconnectSocket();
@@ -36,7 +41,9 @@ function clearBrokenSession() {
     console.log("Socket disconnect during auth reset failed:", error);
   }
 
-  useAuthStore.getState().logout();
+  if (cachedLogout) {
+    cachedLogout();
+  }
 }
 
 export async function apiFetch(path: string, options: ApiFetchOptions = {}) {

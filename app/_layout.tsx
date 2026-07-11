@@ -4,10 +4,12 @@ import { Stack } from "expo-router";
 import { useEffect } from "react";
 import {
   clearCachedClerkToken,
+  getBestAccessTokenSync,
   registerClerkTokenGetter,
   setCachedClerkToken,
 } from "../lib/auth-token";
-import { disconnectSocket } from "../lib/socket";
+import { disconnectSocket, setTokenProvider } from "../lib/socket";
+import { setLogoutHandler } from "../lib/api";
 import { useAuthStore } from "../store/auth";
 
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
@@ -16,6 +18,16 @@ function ClerkTokenBridge() {
   const { isLoaded, isSignedIn, getToken } = useAuth();
   const authMode = useAuthStore((state) => state.authMode);
   const logout = useAuthStore((state) => state.logout);
+
+  useEffect(() => {
+    setTokenProvider(getBestAccessTokenSync);
+    setLogoutHandler(logout);
+
+    return () => {
+      setTokenProvider(null);
+      setLogoutHandler(null);
+    };
+  }, [logout]);
 
   useEffect(() => {
     registerClerkTokenGetter(async () => {

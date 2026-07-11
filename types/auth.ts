@@ -2,12 +2,12 @@ export type UserRole = "CUSTOMER" | "DRIVER" | "ADMIN";
 
 export type DriverProfile = {
   id: string;
-  plateNumber: string;
-  vehicleType: string;
-  vehicleImageUrl?: string;
-  ownershipProofUrl?: string;
+  plateNumber?: string | null;
+  vehicleType?: string | null;
+  vehicleImageUrl?: string | null;
+  ownershipProofUrl?: string | null;
   approvalStatus?: string;
-  availability?: "OFFLINE" | "ONLINE" | "BUSY" | string;
+  availability?: "OFFLINE" | "ONLINE" | "BUSY";
   currentLat?: number | null;
   currentLng?: number | null;
   currentHeading?: number | null;
@@ -20,7 +20,7 @@ export type AuthUser = {
   fullName: string;
   username?: string | null;
   email: string;
-  phone: string | null;
+  phone?: string | null;
   role: UserRole;
   driverProfile?: DriverProfile | null;
 };
