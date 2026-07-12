@@ -49,6 +49,7 @@ export default function RequestScreen() {
     specialNotes,
     estimatedPrice,
     distanceKm,
+    scheduledFor, // <-- NEW
   } = useLocalSearchParams<{
     pickup?: string;
     pickupLat?: string;
@@ -63,6 +64,7 @@ export default function RequestScreen() {
     specialNotes?: string;
     estimatedPrice?: string;
     distanceKm?: string;
+    scheduledFor?: string; // <-- NEW
   }>();
 
   const selectedVehicle = useMemo(
@@ -79,6 +81,15 @@ export default function RequestScreen() {
     () => getVehicleLabel(selectedVehicle),
     [selectedVehicle],
   );
+
+  const scheduledDate = useMemo(() => {
+    if (!scheduledFor) return null;
+    try {
+      return new Date(scheduledFor);
+    } catch {
+      return null;
+    }
+  }, [scheduledFor]);
 
   const validatePayload = () => {
     const missing: string[] = [];
@@ -118,6 +129,7 @@ export default function RequestScreen() {
       specialNotes: specialNotes || null,
       estimatedPrice: Number(estimatedPrice),
       distanceKm: Number(distanceKm),
+      scheduledFor: scheduledFor || null, // <-- NEW
     };
 
     const validationErrors = validateTripRequestParams(tripParams);
@@ -134,7 +146,10 @@ export default function RequestScreen() {
       const tripId = await useTripStore.getState().createTrip();
       if (!tripId) {
         const error = useTripStore.getState().error;
-        Alert.alert("Request failed", error || "Failed to create trip. Please try again.");
+        Alert.alert(
+          "Request failed",
+          error || "Failed to create trip. Please try again.",
+        );
         return;
       }
 
@@ -155,6 +170,7 @@ export default function RequestScreen() {
           specialNotes,
           estimatedPrice,
           distanceKm,
+          scheduledFor: scheduledFor || null, // <-- NEW
         },
       });
     } catch (error: any) {
@@ -220,6 +236,14 @@ export default function RequestScreen() {
             <Text style={styles.label}>Distance</Text>
             <Text style={styles.value}>{distanceKm || "0"} km</Text>
           </View>
+
+          {/* Display scheduled time if set */}
+          {scheduledDate && (
+            <View style={styles.detailItem}>
+              <Text style={styles.label}>Scheduled Pickup</Text>
+              <Text style={styles.value}>{scheduledDate.toLocaleString()}</Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.sectionCard}>
@@ -245,9 +269,7 @@ export default function RequestScreen() {
 
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Vehicle</Text>
-          <Text style={styles.vehicleValue}>
-            {vehicleLabel}
-          </Text>
+          <Text style={styles.vehicleValue}>{vehicleLabel}</Text>
         </View>
 
         <View style={styles.priceCard}>
@@ -281,7 +303,9 @@ export default function RequestScreen() {
                   size={20}
                   color="#fff"
                 />
-                <Text style={styles.requestButtonText}>Find Driver</Text>
+                <Text style={styles.requestButtonText}>
+                  {scheduledFor ? "Schedule Trip" : "Find Driver"}
+                </Text>
               </>
             )}
           </View>

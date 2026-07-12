@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { apiFetch } from "../lib/api";
 import { connectSocket, getSocket } from "../lib/socket";
-import type { Trip, DriverLiveLocation } from "../types/trip";
+import type { DriverLiveLocation, Trip } from "../types/trip";
 
 export type TripRequestParams = {
   pickupAddress: string;
@@ -16,21 +16,31 @@ export type TripRequestParams = {
   specialNotes: string | null;
   estimatedPrice: number;
   distanceKm: number;
+  scheduledFor?: string | null; // <-- NEW
 };
 
-export function validateTripRequestParams(params: TripRequestParams | null): string[] {
+export function validateTripRequestParams(
+  params: TripRequestParams | null,
+): string[] {
   if (!params) return ["No request data"];
   const missing: string[] = [];
   if (!params.pickupAddress) missing.push("pickupAddress");
-  if (typeof params.pickupLat !== "number" || !isFinite(params.pickupLat)) missing.push("pickupLat");
-  if (typeof params.pickupLng !== "number" || !isFinite(params.pickupLng)) missing.push("pickupLng");
+  if (typeof params.pickupLat !== "number" || !isFinite(params.pickupLat))
+    missing.push("pickupLat");
+  if (typeof params.pickupLng !== "number" || !isFinite(params.pickupLng))
+    missing.push("pickupLng");
   if (!params.dropoffAddress) missing.push("dropoffAddress");
-  if (typeof params.dropoffLat !== "number" || !isFinite(params.dropoffLat)) missing.push("dropoffLat");
-  if (typeof params.dropoffLng !== "number" || !isFinite(params.dropoffLng)) missing.push("dropoffLng");
+  if (typeof params.dropoffLat !== "number" || !isFinite(params.dropoffLat))
+    missing.push("dropoffLat");
+  if (typeof params.dropoffLng !== "number" || !isFinite(params.dropoffLng))
+    missing.push("dropoffLng");
   if (!params.vehicleType) missing.push("vehicleType");
   if (!params.loadSize) missing.push("loadSize");
-  if (typeof params.estimatedPrice !== "number" || params.estimatedPrice <= 0) missing.push("estimatedPrice");
-  if (typeof params.distanceKm !== "number" || params.distanceKm <= 0) missing.push("distanceKm");
+  if (typeof params.estimatedPrice !== "number" || params.estimatedPrice <= 0)
+    missing.push("estimatedPrice");
+  if (typeof params.distanceKm !== "number" || params.distanceKm <= 0)
+    missing.push("distanceKm");
+  // scheduledFor is optional, no validation needed
   return missing;
 }
 
@@ -81,7 +91,10 @@ export const useTripStore = create<TripState>()((set, get) => ({
     const request = get().currentRequest;
     const errors = validateTripRequestParams(request);
     if (errors.length > 0) {
-      set({ error: `Invalid request: ${errors.join(", ")}`, isSubmitting: false });
+      set({
+        error: `Invalid request: ${errors.join(", ")}`,
+        isSubmitting: false,
+      });
       return null;
     }
 
@@ -103,6 +116,7 @@ export const useTripStore = create<TripState>()((set, get) => ({
           specialNotes: request!.specialNotes,
           estimatedPrice: request!.estimatedPrice,
           distanceKm: request!.distanceKm,
+          scheduledFor: request!.scheduledFor || null, // <-- NEW
         },
       });
 
@@ -141,84 +155,122 @@ export const useTripStore = create<TripState>()((set, get) => ({
   cancelTrip: async (tripId) => {
     set({ isSubmitting: true, error: null });
     try {
-      const res = await apiFetch(`/trips/${tripId}/cancel`, { method: "PATCH" });
+      const res = await apiFetch(`/trips/${tripId}/cancel`, {
+        method: "PATCH",
+      });
       const trip: Trip | undefined = res?.trip;
       if (trip) set({ currentTrip: trip });
       set({ isSubmitting: false });
     } catch (err: any) {
-      set({ isSubmitting: false, error: err?.message ?? "Failed to cancel trip" });
+      set({
+        isSubmitting: false,
+        error: err?.message ?? "Failed to cancel trip",
+      });
     }
   },
 
   confirmPickup: async (tripId) => {
     set({ isSubmitting: true, error: null });
     try {
-      const res = await apiFetch(`/trips/${tripId}/confirm-pickup`, { method: "PATCH" });
+      const res = await apiFetch(`/trips/${tripId}/confirm-pickup`, {
+        method: "PATCH",
+      });
       const trip: Trip | undefined = res?.trip;
       if (trip) set({ currentTrip: trip });
       set({ isSubmitting: false });
     } catch (err: any) {
-      set({ isSubmitting: false, error: err?.message ?? "Failed to confirm pickup" });
+      set({
+        isSubmitting: false,
+        error: err?.message ?? "Failed to confirm pickup",
+      });
     }
   },
 
   confirmDelivery: async (tripId) => {
     set({ isSubmitting: true, error: null });
     try {
-      const res = await apiFetch(`/trips/${tripId}/confirm-delivery`, { method: "PATCH" });
+      const res = await apiFetch(`/trips/${tripId}/confirm-delivery`, {
+        method: "PATCH",
+      });
       const trip: Trip | undefined = res?.trip;
       if (trip) set({ currentTrip: trip });
       set({ isSubmitting: false });
     } catch (err: any) {
-      set({ isSubmitting: false, error: err?.message ?? "Failed to confirm delivery" });
+      set({
+        isSubmitting: false,
+        error: err?.message ?? "Failed to confirm delivery",
+      });
     }
   },
 
   updateTripStatus: async (tripId, status) => {
     set({ isSubmitting: true, error: null });
     try {
-      const res = await apiFetch(`/trips/${tripId}/status`, { method: "PATCH", body: { status } });
+      const res = await apiFetch(`/trips/${tripId}/status`, {
+        method: "PATCH",
+        body: { status },
+      });
       const trip: Trip | undefined = res?.trip;
       if (trip) set({ currentTrip: trip });
       set({ isSubmitting: false });
     } catch (err: any) {
-      set({ isSubmitting: false, error: err?.message ?? "Failed to update trip status" });
+      set({
+        isSubmitting: false,
+        error: err?.message ?? "Failed to update trip status",
+      });
     }
   },
 
   selectPaymentMethod: async (tripId, method) => {
     set({ isSubmitting: true, error: null });
     try {
-      const res = await apiFetch(`/payments/trips/${tripId}/method`, { method: "PATCH", body: { paymentMethod: method } });
+      const res = await apiFetch(`/payments/trips/${tripId}/method`, {
+        method: "PATCH",
+        body: { paymentMethod: method },
+      });
       const trip: Trip | undefined = res?.trip;
       if (trip) set({ currentTrip: trip });
       set({ isSubmitting: false });
     } catch (err: any) {
-      set({ isSubmitting: false, error: err?.message ?? "Failed to select payment method" });
+      set({
+        isSubmitting: false,
+        error: err?.message ?? "Failed to select payment method",
+      });
     }
   },
 
   initiateMpesa: async (tripId) => {
     set({ isSubmitting: true, error: null });
     try {
-      const res = await apiFetch(`/payments/trips/${tripId}/mpesa/initiate`, { method: "POST", body: {} });
+      const res = await apiFetch(`/payments/trips/${tripId}/mpesa/initiate`, {
+        method: "POST",
+        body: {},
+      });
       const trip: Trip | undefined = res?.trip;
       if (trip) set({ currentTrip: trip });
       set({ isSubmitting: false });
     } catch (err: any) {
-      set({ isSubmitting: false, error: err?.message ?? "Failed to initiate M-Pesa payment" });
+      set({
+        isSubmitting: false,
+        error: err?.message ?? "Failed to initiate M-Pesa payment",
+      });
     }
   },
 
   confirmCash: async (tripId) => {
     set({ isSubmitting: true, error: null });
     try {
-      const res = await apiFetch(`/payments/trips/${tripId}/cash/confirm`, { method: "PATCH" });
+      const res = await apiFetch(`/payments/trips/${tripId}/cash/confirm`, {
+        method: "PATCH",
+      });
       const trip: Trip | undefined = res?.trip;
       if (trip) set({ currentTrip: trip });
       set({ isSubmitting: false });
     } catch (err: any) {
-      set({ isSubmitting: false, error: err?.message ?? "Failed to confirm cash payment" });
+      set({
+        isSubmitting: false,
+        error: err?.message ?? "Failed to confirm cash payment",
+      });
     }
   },
 

@@ -103,13 +103,11 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
           suspendedUsers: s.suspendedUsers ?? 0,
           deliveredRevenue: s.deliveredRevenue ?? 0,
         },
-        recentOrders: Array.isArray(res?.recentOrders)
-          ? res.recentOrders
-          : [],
+        recentOrders: Array.isArray(res?.recentOrders) ? res.recentOrders : [],
         loading: false,
         refreshing: false,
       });
-    } catch (error) {
+    } catch {
       set({
         stats: FALLBACK_STATS,
         recentOrders: [],
