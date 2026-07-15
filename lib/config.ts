@@ -1,7 +1,7 @@
 const rawHostBaseUrl =
   process.env.EXPO_PUBLIC_API_BASE_URL ||
   process.env.EXPO_PUBLIC_API_URL ||
-  "http://192.168.0.25:5000";
+  "http://192.168.50.103:5000";
 
 function normalizeUrl(url: string) {
   return url.trim().replace(/\/+$/, "");
