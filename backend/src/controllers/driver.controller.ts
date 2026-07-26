@@ -312,3 +312,41 @@ export async function acceptTrip(req: AuthRequest, res: Response) {
     return res.status(500).json({ message: "Server error" });
   }
 }
+
+// ---------- NEW: KYC UPDATE ----------
+export async function updateDriverKyc(req: AuthRequest, res: Response) {
+  try {
+    const {
+      plateNumber,
+      vehicleType,
+      driverLicenseNumber,
+      vehicleImageUrl,
+      ownershipProofUrl,
+      complianceCertificateUrl,
+    } = req.body;
+
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const driver = await prisma.driverProfile.findUnique({ where: { userId } });
+    if (!driver) return res.status(404).json({ message: "Driver not found" });
+
+    const updated = await prisma.driverProfile.update({
+      where: { id: driver.id },
+      data: {
+        plateNumber: plateNumber ?? driver.plateNumber,
+        vehicleType: vehicleType ?? driver.vehicleType,
+        driverLicenseNumber: driverLicenseNumber ?? driver.driverLicenseNumber,
+        vehicleImageUrl: vehicleImageUrl ?? driver.vehicleImageUrl,
+        ownershipProofUrl: ownershipProofUrl ?? driver.ownershipProofUrl,
+        complianceCertificateUrl: complianceCertificateUrl ?? driver.complianceCertificateUrl,
+        kycSubmittedAt: new Date(),
+      },
+    });
+
+    return res.json({ message: "KYC updated successfully", driver: updated });
+  } catch (error) {
+    console.error("updateDriverKyc error:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+}

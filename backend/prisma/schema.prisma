@@ -41,6 +41,9 @@ model DriverProfile {
   vehicleType       String?
   vehicleImageUrl   String?
   ownershipProofUrl String?
+  driverLicenseNumber   String?              
+  complianceCertificateUrl String?           
+  kycSubmittedAt        DateTime?            
   approvalStatus    DriverApprovalStatus    @default(PENDING)
   availability      DriverAvailability      @default(OFFLINE)
   currentLat        Float?
@@ -152,7 +155,7 @@ enum RequestStatus {
     DELIVERED
     PAYMENT_PENDING
     CANCELLED
-    SCHEDULED          // <-- NEW
+    SCHEDULED   
 }
 
 enum PaymentMethod {

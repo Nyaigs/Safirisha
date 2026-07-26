@@ -7,6 +7,7 @@ import {
   goOffline,
   goOnline,
   updateDriverAvailability,
+  updateDriverKyc,
   updateDriverLocation,
 } from "../controllers/driver.controller";
 import { authenticate } from "../middleware/auth.middleware";
@@ -23,6 +24,9 @@ router.get("/me/nearby-trips", getNearbyTripRequests);
 
 router.patch("/me/availability", updateDriverAvailability);
 router.patch("/me/location", updateDriverLocation);
+
+// KYC route
+router.patch("/me/kyc", updateDriverKyc);    
 
 router.post("/go-online", goOnline);
 router.post("/go-offline", goOffline);
