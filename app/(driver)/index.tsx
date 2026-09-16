@@ -97,6 +97,64 @@ export default function DriverDashboard() {
     };
   }, [setActiveTrip]);
 
+  const stopLocationTracking = useCallback(() => {
+    watchRef.current?.remove();
+    watchRef.current = null;
+  }, []);
+
+  // Fifteen seconds or 25 m balances dispatch freshness with foreground battery use.
+  const startLocationTracking = useCallback(async (): Promise<boolean> => {
+    const perm = await Location.requestForegroundPermissionsAsync();
+    if (perm.status !== "granted") return false;
+
+    watchRef.current?.remove();
+
+    let loc: Location.LocationObject;
+    try {
+      loc = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+
+      await apiFetch("/drivers/me/location", {
+        method: "PATCH",
+        body: { lat: loc.coords.latitude, lng: loc.coords.longitude },
+      });
+    } catch {
+      setLocationLabel("Location unavailable");
+      return false;
+    }
+
+    try {
+      const places = await Location.reverseGeocodeAsync({
+        latitude: loc.coords.latitude,
+        longitude: loc.coords.longitude,
+      });
+
+      const place = places?.[0];
+      if (place) {
+        const parts = [place.city, place.region, place.country].filter(Boolean);
+        if (parts.length) setLocationLabel(parts.join(", "));
+      }
+    } catch {
+      setLocationLabel("Location available");
+    }
+
+    watchRef.current = await Location.watchPositionAsync(
+      { accuracy: Location.Accuracy.Balanced, timeInterval: 15000, distanceInterval: 25 },
+      async (loc) => {
+        try {
+          await apiFetch("/drivers/me/location", {
+            method: "PATCH",
+            body: { lat: loc.coords.latitude, lng: loc.coords.longitude },
+          });
+        } catch {
+          /* A subsequent foreground update retries without interrupting driving. */
+        }
+      },
+    );
+    return true;
+  }, []);
+
   useEffect(() => {
     if (!isOnline) {
       stopLocationTracking();
@@ -114,7 +172,7 @@ export default function DriverDashboard() {
       stopLocationTracking();
       appStateSub.remove();
     };
-  }, [isOnline]);
+  }, [isOnline, startLocationTracking, stopLocationTracking]);
 
   useEffect(() => {
     const pulse = Animated.loop(
@@ -136,51 +194,6 @@ export default function DriverDashboard() {
     return () => pulse.stop();
   }, [isOnline, pulseAnim]);
 
-  const startLocationTracking = useCallback(async () => {
-    const perm = await Location.requestForegroundPermissionsAsync();
-    if (perm.status !== "granted") return;
-
-    watchRef.current?.remove();
-
-    try {
-      const loc = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
-
-      const places = await Location.reverseGeocodeAsync({
-        latitude: loc.coords.latitude,
-        longitude: loc.coords.longitude,
-      });
-
-      const place = places?.[0];
-      if (place) {
-        const parts = [place.city, place.region, place.country].filter(Boolean);
-        if (parts.length) setLocationLabel(parts.join(", "));
-      }
-    } catch {
-      setLocationLabel("Location available");
-    }
-
-    watchRef.current = await Location.watchPositionAsync(
-      { accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 10 },
-      async (loc) => {
-        try {
-          await apiFetch("/drivers/me/location", {
-            method: "PATCH",
-            body: { lat: loc.coords.latitude, lng: loc.coords.longitude },
-          });
-        } catch {
-          /* silent */
-        }
-      },
-    );
-  }, []);
-
-  const stopLocationTracking = useCallback(() => {
-    watchRef.current?.remove();
-    watchRef.current = null;
-  }, []);
-
   const handleToggle = useCallback(async () => {
     if (isToggling) return;
 
@@ -189,8 +202,12 @@ export default function DriverDashboard() {
         await goOffline();
         stopLocationTracking();
       } else {
+        const hasLocation = await startLocationTracking();
+        if (!hasLocation) {
+          Alert.alert("Location required", "Enable location access and wait for a valid GPS fix before going online.");
+          return;
+        }
         await goOnline();
-        startLocationTracking();
       }
     } catch (err: any) {
       Alert.alert("Toggle failed", err?.message || "Could not change availability");

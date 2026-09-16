@@ -207,7 +207,7 @@ export default function RegisterScreen() {
             <TextInput
               value={username}
               onChangeText={setUsername}
-              placeholder="e.g. nyaigs.dev"
+              placeholder="e.g. delivery_user"
               placeholderTextColor="#94A3B8"
               style={styles.input}
               autoCapitalize="none"
@@ -225,6 +225,7 @@ export default function RegisterScreen() {
               placeholderTextColor="#94A3B8"
               style={styles.input}
               keyboardType="phone-pad"
+              autoComplete="tel"
               returnKeyType="next"
             />
           </View>
@@ -238,6 +239,7 @@ export default function RegisterScreen() {
               placeholderTextColor="#94A3B8"
               style={styles.input}
               keyboardType="email-address"
+              autoComplete="email"
               autoCapitalize="none"
               autoCorrect={false}
               returnKeyType="next"

@@ -6,6 +6,8 @@ import {
   Alert,
   Linking,
   SafeAreaView,
+  ScrollView,
+  Share,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -109,11 +111,14 @@ export default function LiveTripScreen() {
   const mapRef = useRef<MapView | null>(null);
   const hasClosedRef = useRef(false);
   const tripFetchedRef = useRef(false);
+  const [socketConnected, setSocketConnected] = useState(false);
 
   const trip = useTripStore((s) => s.currentTrip);
   const driverLocation = useTripStore((s) => s.driverLocation);
   const isLoading = useTripStore((s) => s.isLoading);
   const isSubmitting = useTripStore((s) => s.isSubmitting);
+  const tripError = useTripStore((s) => s.error);
+  const fetchTrip = useTripStore((s) => s.fetchTrip);
   const cancelTrip = useTripStore((s) => s.cancelTrip);
   const confirmPickupAction = useTripStore((s) => s.confirmPickup);
   const confirmDeliveryAction = useTripStore((s) => s.confirmDelivery);
@@ -135,11 +140,11 @@ export default function LiveTripScreen() {
   const statusPillColors = useMemo(() => getStatusPillColors(currentStatus), [currentStatus]);
   const progressStep = useMemo(() => getProgressStep(currentStatus), [currentStatus]);
 
-  const closeFlow = useCallback((title: string, message: string, route: string) => {
+  const closeFlow = useCallback((title: string, message: string, route: string, completedTripId?: string) => {
     if (hasClosedRef.current) return;
     hasClosedRef.current = true;
     Alert.alert(title, message, [
-      { text: "OK", onPress: () => router.replace(route as any) },
+      { text: "OK", onPress: () => completedTripId ? router.replace({ pathname: "/(customer)/rate-trip", params: { tripId: completedTripId } }) : router.replace(route as any) },
     ]);
   }, []);
 
@@ -217,6 +222,15 @@ export default function LiveTripScreen() {
     const socket = connectSocket();
     joinTripRoom(safeTripId);
 
+    const reconcileAfterReconnect = () => {
+      // Socket events are hints; reload the authoritative trip record.
+      void useTripStore.getState().fetchTrip(safeTripId);
+      joinTripRoom(safeTripId);
+      setSocketConnected(true);
+    };
+
+    const markDisconnected = () => setSocketConnected(false);
+
     const onDriverLocation = (payload: DriverLocationUpdatedPayload) => {
       if (!isMounted) return;
       if (payload.tripId && payload.tripId !== safeTripId) return;
@@ -243,7 +257,7 @@ export default function LiveTripScreen() {
         closeFlow(payload.trip.expiredAt ? "Search expired" : "Trip cancelled", payload.trip.expiredAt ? "No driver accepted this request in time." : "This trip has been cancelled.", "/(customer)/(tabs)");
       }
       if (payload.trip.status === "DELIVERED") {
-        closeFlow("Trip completed", "Your delivery has been completed successfully.", "/(customer)/(tabs)/activity");
+        closeFlow("Trip completed", "Your delivery has been completed successfully.", "/(customer)/(tabs)/activity", payload.trip.id);
       }
     };
 
@@ -266,13 +280,19 @@ export default function LiveTripScreen() {
     };
 
     socket.on("driver_location_updated", onDriverLocation);
+    socket.on("connect", reconcileAfterReconnect);
+    socket.on("disconnect", markDisconnected);
     socket.on("trip_updated", onTripUpdated);
     socket.on("trip_status_updated", onTripStatusUpdated);
     socket.on("trip_expired", onTripExpired);
 
+    if (socket.connected) setSocketConnected(true);
+
     return () => {
       isMounted = false;
       socket.off("driver_location_updated", onDriverLocation);
+      socket.off("connect", reconcileAfterReconnect);
+      socket.off("disconnect", markDisconnected);
       socket.off("trip_updated", onTripUpdated);
       socket.off("trip_status_updated", onTripStatusUpdated);
       socket.off("trip_expired", onTripExpired);
@@ -334,7 +354,10 @@ export default function LiveTripScreen() {
       Alert.alert("M-Pesa failed", useTripStore.getState().error || "Could not start M-Pesa payment.");
       return;
     }
-    Alert.alert("M-Pesa initiated", "M-Pesa payment has been initiated. Follow the prompt on your phone.");
+    Alert.alert(
+      "M-Pesa test payment complete",
+      "This environment is using the configured M-Pesa simulation. No phone PIN prompt was sent.",
+    );
   };
 
   const openDialer = async () => {
@@ -352,6 +375,25 @@ export default function LiveTripScreen() {
     }
   };
 
+  const shareTrip = async () => {
+    if (!trip) return;
+
+    try {
+      await Share.share({
+        title: "Safirisha delivery",
+        message: [
+          "Safirisha delivery",
+          `Pickup: ${trip.pickupAddress}`,
+          `Drop-off: ${trip.dropoffAddress}`,
+          `Driver: ${displayDriverName}`,
+          `Vehicle: ${displayVehicleType}${displayPlateNumber !== "-" ? ` (${displayPlateNumber})` : ""}`,
+        ].join("\n"),
+      });
+    } catch {
+      Alert.alert("Share unavailable", "Unable to open sharing on this device right now.");
+    }
+  };
+
   if (!safeTripId) {
     return (
       <SafeAreaView style={styles.centerScreen}>
@@ -364,12 +406,24 @@ export default function LiveTripScreen() {
     );
   }
 
-  if (isLoading || !trip) {
+  if (isLoading) {
     return (
       <SafeAreaView style={styles.centerScreen}>
         <ActivityIndicator size="large" color="#111827" />
         <Text style={styles.loadingTitle}>Loading live trip...</Text>
         <Text style={styles.loadingText}>Fetching driver updates and trip details.</Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (!trip) {
+    return (
+      <SafeAreaView style={styles.centerScreen}>
+        <Text style={styles.errorTitle}>Live trip unavailable</Text>
+        <Text style={styles.errorText}>{tripError || "We couldn't load this trip. Please try again."}</Text>
+        <TouchableOpacity style={styles.primaryButton} onPress={() => void fetchTrip(safeTripId)}>
+          <Text style={styles.primaryButtonText}>Try again</Text>
+        </TouchableOpacity>
       </SafeAreaView>
     );
   }
@@ -428,10 +482,14 @@ export default function LiveTripScreen() {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.bottomSheet}>
+        <ScrollView
+          style={styles.bottomSheet}
+          contentContainerStyle={styles.bottomSheetContent}
+          showsVerticalScrollIndicator={false}
+        >
           <View style={styles.livePill}>
-            <View style={styles.liveDot} />
-            <Text style={styles.livePillText}>LIVE TRIP</Text>
+            <View style={[styles.liveDot, !socketConnected && styles.liveDotOffline]} />
+            <Text style={styles.livePillText}>{socketConnected ? "LIVE TRIP" : "RECONNECTING"}</Text>
           </View>
 
           <View style={styles.statusRow}>
@@ -476,6 +534,16 @@ export default function LiveTripScreen() {
               </TouchableOpacity>
             </View>
           </View>
+
+          <TouchableOpacity
+            style={styles.shareButton}
+            accessibilityRole="button"
+            accessibilityLabel="Share delivery details"
+            onPress={shareTrip}
+          >
+            <Ionicons name="share-social-outline" size={18} color="#0D6B5D" />
+            <Text style={styles.shareButtonText}>Share delivery details</Text>
+          </TouchableOpacity>
 
           <View style={styles.routeCard}>
             <Text style={styles.routeTitle}>Trip Summary</Text>
@@ -536,7 +604,7 @@ export default function LiveTripScreen() {
               {isSubmitting ? <ActivityIndicator color="#b91c1c" /> : <><Ionicons name="close-circle-outline" size={18} color="#b91c1c" /><Text style={styles.cancelButtonText}>Cancel Trip</Text></>}
             </TouchableOpacity>
           )}
-        </View>
+        </ScrollView>
       </SafeAreaView>
     </View>
   );
@@ -548,9 +616,11 @@ const styles = StyleSheet.create({
   overlayContainer: { ...StyleSheet.absoluteFillObject, justifyContent: "space-between" },
   topBar: { paddingTop: 16, paddingHorizontal: 16, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   topActionButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: "#ffffff", alignItems: "center", justifyContent: "center", shadowColor: "#000", shadowOpacity: 0.08, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
-  bottomSheet: { backgroundColor: "#fff", borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 16, paddingBottom: 20, maxHeight: "62%" },
+  bottomSheet: { backgroundColor: "#fff", borderTopLeftRadius: 28, borderTopRightRadius: 28, maxHeight: "62%" },
+  bottomSheetContent: { padding: 16, paddingBottom: 28 },
   livePill: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", backgroundColor: "#111827", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, marginBottom: 12 },
   liveDot: { width: 8, height: 8, borderRadius: 999, backgroundColor: "#22c55e", marginRight: 8 },
+  liveDotOffline: { backgroundColor: "#f59e0b" },
   livePillText: { color: "#fff", fontSize: 12, fontWeight: "800" },
   statusRow: { flexDirection: "row", justifyContent: "space-between", gap: 10, alignItems: "flex-start", marginBottom: 14 },
   statusTextWrap: { flex: 1 },
@@ -573,6 +643,8 @@ const styles = StyleSheet.create({
   driverName: { color: "#111827", fontWeight: "900", fontSize: 16 },
   driverMeta: { color: "#64748b", marginTop: 4, fontWeight: "700" },
   callButton: { width: 44, height: 44, borderRadius: 14, backgroundColor: "#111827", justifyContent: "center", alignItems: "center" },
+  shareButton: { minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 14, borderWidth: 1, borderColor: "#0D6B5D", backgroundColor: "#E4F4EF", marginBottom: 12 },
+  shareButtonText: { color: "#0D6B5D", fontWeight: "800" },
   routeCard: { backgroundColor: "#fff", borderRadius: 18, padding: 14, borderWidth: 1, borderColor: "#e5e7eb", marginBottom: 12 },
   routeTitle: { fontSize: 17, fontWeight: "900", color: "#111827", marginBottom: 10 },
   routeItem: { marginBottom: 10 },

@@ -3,7 +3,15 @@ import { Response } from "express";
 import { CANCELLATION_FEES } from "../constants/cancellation";
 import { prisma } from "../lib/prisma";
 import { AuthRequest } from "../middleware/auth.middleware";
-import { buildTripFinancials } from "../services/trip-pricing.service";
+import { buildTripFinancials, calculateTripPrice, isVehicleSuitableForLoad } from "../services/trip-pricing.service";
+import { DRIVER_LOCATION_MAX_AGE_MS, findNearbyDrivers, hasFreshDriverLocation } from "../services/dispatch.service";
+import { getExpiryDate } from "../services/trip.service";
+
+const DRIVER_ACCEPT_RADIUS_KM = 10;
+
+function hasValidCoordinates(lat: number | null, lng: number | null) {
+  return lat !== null && lng !== null && Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
+}
 
 function normalizeVehicleType(value?: string | null) {
   const normalized = String(value || "")
@@ -31,6 +39,19 @@ function normalizeVehicleType(value?: string | null) {
   return aliases[normalized] ?? normalized;
 }
 
+function calculateDistanceKm(
+  fromLat: number,
+  fromLng: number,
+  toLat: number,
+  toLng: number,
+) {
+  const toRadians = (value: number) => (value * Math.PI) / 180;
+  const deltaLat = toRadians(toLat - fromLat);
+  const deltaLng = toRadians(toLng - fromLng);
+  const a = Math.sin(deltaLat / 2) ** 2 + Math.cos(toRadians(fromLat)) * Math.cos(toRadians(toLat)) * Math.sin(deltaLng / 2) ** 2;
+  return Number((6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))).toFixed(2));
+}
+
 const ACTIVE_DRIVER_TRIP_STATUSES: RequestStatus[] = [
   RequestStatus.ACCEPTED,
   RequestStatus.DRIVER_EN_ROUTE,
@@ -56,6 +77,11 @@ const ACTIVE_CUSTOMER_TRIP_STATUSES: RequestStatus[] = [
   RequestStatus.DELIVERY_CONFIRMED,
   RequestStatus.COMPLETED_PENDING_CONFIRMATION,
   RequestStatus.PAYMENT_PENDING,
+];
+
+const SEARCHABLE_TRIP_STATUSES: RequestStatus[] = [
+  RequestStatus.SEARCHING,
+  RequestStatus.SEARCHING_DRIVER,
 ];
 
 function buildTripInclude() {
@@ -100,11 +126,17 @@ function emitTripUpdated(req: AuthRequest, trip: any) {
   io.emit("admin_stats_updated");
 }
 
-function emitNewTripCreated(req: AuthRequest, trip: any) {
+async function emitNewTripCreated(req: AuthRequest, trip: any) {
   const io = req.app.get("io");
   if (!io) return;
 
-  io.emit("new_trip_created", trip);
+  const candidates = await findNearbyDrivers({
+    lat: trip.pickupLat,
+    lng: trip.pickupLng,
+    vehicleType: trip.vehicleType,
+    radiusKm: 10,
+  });
+  for (const candidate of candidates) io.to(`user:${candidate.userId}`).emit("new_trip_created", trip);
   io.emit("admin_stats_updated");
 }
 
@@ -193,40 +225,62 @@ export async function createTripRequest(req: AuthRequest, res: Response) {
       });
     }
 
+    const coordinates = [pickupLat, pickupLng, dropoffLat, dropoffLng].map(Number);
+    if (!coordinates.every(Number.isFinite) || Math.abs(coordinates[0]) > 90 || Math.abs(coordinates[2]) > 90 || Math.abs(coordinates[1]) > 180 || Math.abs(coordinates[3]) > 180) {
+      return res.status(400).json({ message: "Pickup and drop-off coordinates must be valid." });
+    }
+
+    const calculatedDistanceKm = calculateDistanceKm(coordinates[0], coordinates[1], coordinates[2], coordinates[3]);
+    if (calculatedDistanceKm <= 0) {
+      return res.status(400).json({ message: "Pickup and drop-off must be different locations." });
+    }
+
+    const normalizedVehicleType = normalizeVehicleType(vehicleType);
+    const normalizedLoadSize = String(loadSize).trim().toUpperCase().replace(/\s+/g, "_");
+    const calculatedPrice = calculateTripPrice(normalizedVehicleType, normalizedLoadSize, calculatedDistanceKm);
+    if (calculatedPrice === null || !isVehicleSuitableForLoad(normalizedVehicleType, normalizedLoadSize)) {
+      return res.status(400).json({ message: "The selected vehicle or load size is not supported." });
+    }
+    if (normalizedLoadSize === "CUSTOM" && !loadDescription?.trim()) {
+      return res.status(400).json({ message: "Describe the custom load before requesting a driver." });
+    }
+
     let status: RequestStatus = RequestStatus.SEARCHING;
     let scheduledDate: Date | null = null;
 
     if (scheduledFor) {
       const date = new Date(scheduledFor);
-      if (isNaN(date.getTime()) || date <= new Date()) {
+      const minimumScheduledTime = new Date(Date.now() + 15 * 60 * 1000);
+      if (isNaN(date.getTime()) || date < minimumScheduledTime) {
         return res
           .status(400)
-          .json({ message: "scheduledFor must be a future datetime" });
+          .json({ message: "Scheduled pickup must be at least 15 minutes from now." });
       }
       scheduledDate = date;
       status = RequestStatus.SCHEDULED;
     }
 
-    const normalizedVehicleType = normalizeVehicleType(vehicleType);
-    const financials = buildTripFinancials(Number(estimatedPrice));
+    const financials = buildTripFinancials(calculatedPrice);
 
     const trip = await prisma.transportRequest.create({
       data: {
         customerId,
         pickupAddress,
-        pickupLat: Number(pickupLat),
-        pickupLng: Number(pickupLng),
+        pickupLat: coordinates[0],
+        pickupLng: coordinates[1],
         dropoffAddress,
-        dropoffLat: Number(dropoffLat),
-        dropoffLng: Number(dropoffLng),
+        dropoffLat: coordinates[2],
+        dropoffLng: coordinates[3],
         vehicleType: normalizedVehicleType,
         loadDescription: loadDescription?.trim() || null,
-        loadSize: String(loadSize).trim().toUpperCase(),
+        loadSize: normalizedLoadSize,
         specialNotes: specialNotes?.trim() || null,
-        estimatedPrice: Number(estimatedPrice),
-        distanceKm: Number(distanceKm),
+        estimatedPrice: calculatedPrice,
+        distanceKm: calculatedDistanceKm,
         status: status,
         scheduledFor: scheduledDate,
+        searchStartedAt: status === RequestStatus.SEARCHING ? new Date() : null,
+        expiresAt: status === RequestStatus.SEARCHING ? getExpiryDate() : null,
         paymentStatus: "UNPAID",
         platformFeePercent: financials.platformFeePercent,
         platformFeeAmount: financials.platformFeeAmount,
@@ -236,7 +290,7 @@ export async function createTripRequest(req: AuthRequest, res: Response) {
     });
 
     emitTripUpdated(req, trip);
-    emitNewTripCreated(req, trip);
+    if (status !== RequestStatus.SCHEDULED) await emitNewTripCreated(req, trip);
 
     return res.status(201).json({
       message: "Trip request created successfully",
@@ -245,6 +299,43 @@ export async function createTripRequest(req: AuthRequest, res: Response) {
   } catch (error) {
     console.error("createTripRequest error:", error);
     return res.status(500).json({ message: "Server error" });
+  }
+}
+
+export async function rateCompletedTrip(req: AuthRequest, res: Response) {
+  try {
+    const customerId = req.user?.id;
+    const tripId = String(req.params.id || "");
+    const rating = Number(req.body?.rating);
+    const feedback = typeof req.body?.feedback === "string" ? req.body.feedback.trim() : "";
+
+    if (!customerId) return res.status(401).json({ message: "Unauthorized" });
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+      return res.status(400).json({ message: "Rating must be a whole number from 1 to 5." });
+    }
+    if (feedback.length > 1000) {
+      return res.status(400).json({ message: "Feedback must be 1,000 characters or fewer." });
+    }
+
+    const trip = await prisma.transportRequest.findFirst({
+      where: { id: tripId, customerId },
+      select: { id: true, status: true, assignedDriverId: true },
+    });
+    if (!trip) return res.status(404).json({ message: "Trip not found." });
+    if (trip.status !== RequestStatus.DELIVERED || !trip.assignedDriverId) {
+      return res.status(400).json({ message: "You can rate a trip after delivery is complete." });
+    }
+
+    const existingRating = await prisma.tripRating.findUnique({ where: { tripId } });
+    if (existingRating) return res.status(409).json({ message: "You have already rated this delivery." });
+
+    const createdRating = await prisma.tripRating.create({
+      data: { tripId, customerId, driverId: trip.assignedDriverId, rating, feedback: feedback || null },
+    });
+    return res.status(201).json({ message: "Thanks for rating your delivery.", rating: createdRating });
+  } catch (error) {
+    console.error("rateCompletedTrip error:", error);
+    return res.status(500).json({ message: "Unable to save your rating. Please try again." });
   }
 }
 
@@ -343,7 +434,7 @@ export async function getMyDriverActiveTrip(req: AuthRequest, res: Response) {
 
 export async function getTripById(req: AuthRequest, res: Response) {
   try {
-    const tripId = String(req.params.id || "");
+    const tripId = String(req.params.id || req.params.tripId || "");
     const userId = req.user?.id;
     const role = req.user?.role;
 
@@ -378,7 +469,7 @@ export async function getTripById(req: AuthRequest, res: Response) {
 
 export async function acceptTripRequest(req: AuthRequest, res: Response) {
   try {
-    const tripId = String(req.params.id || "");
+    const tripId = String(req.params.id || req.params.tripId || "");
     const userId = req.user?.id;
 
     if (!userId) {
@@ -413,6 +504,13 @@ export async function acceptTripRequest(req: AuthRequest, res: Response) {
       });
     }
 
+    if (driver.availability !== "ONLINE") {
+      return res.status(409).json({ message: "Go online before accepting a delivery" });
+    }
+    if (!hasValidCoordinates(driver.currentLat, driver.currentLng) || !hasFreshDriverLocation(driver.lastLocationAt)) {
+      return res.status(400).json({ message: `A fresh driver location is required (updated within ${DRIVER_LOCATION_MAX_AGE_MS / 60000} minutes).` });
+    }
+
     const existingActiveTrip = await prisma.transportRequest.findFirst({
       where: {
         assignedDriverId: driver.id,
@@ -421,7 +519,7 @@ export async function acceptTripRequest(req: AuthRequest, res: Response) {
       select: { id: true },
     });
 
-    if (existingActiveTrip || driver.availability === "BUSY") {
+    if (existingActiveTrip) {
       return res.status(409).json({
         message: "You already have an active trip",
       });
@@ -435,7 +533,7 @@ export async function acceptTripRequest(req: AuthRequest, res: Response) {
       return res.status(404).json({ message: "Trip not found" });
     }
 
-    if (foundTrip.status !== RequestStatus.SEARCHING) {
+    if (!SEARCHABLE_TRIP_STATUSES.includes(foundTrip.status)) {
       return res.status(409).json({
         message: "This trip has already been taken or is no longer available",
       });
@@ -450,11 +548,16 @@ export async function acceptTripRequest(req: AuthRequest, res: Response) {
       });
     }
 
+    const distanceToPickupKm = calculateDistanceKm(driver.currentLat!, driver.currentLng!, foundTrip.pickupLat, foundTrip.pickupLng);
+    if (distanceToPickupKm > DRIVER_ACCEPT_RADIUS_KM) {
+      return res.status(403).json({ message: "This delivery is outside your current service radius." });
+    }
+
     const updatedTrip = await prisma.$transaction(async (tx) => {
       const claimed = await tx.transportRequest.updateMany({
         where: {
           id: tripId,
-          status: RequestStatus.SEARCHING,
+          status: { in: SEARCHABLE_TRIP_STATUSES },
           assignedDriverId: null,
         },
         data: {

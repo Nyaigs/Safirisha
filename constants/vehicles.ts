@@ -29,13 +29,13 @@ export const VEHICLES: VehicleItem[] = [
     name: "Pickup",
     capacity: "Medium to large loads",
     icon: "car-pickup",
-    supportedLoadSizes: ["Small", "Medium", "Large"],
+    supportedLoadSizes: ["Small", "Medium", "Large", "Custom"],
   },
   {
     id: "lorry",
     name: "Lorry",
     capacity: "Heavy cargo and bulk transport",
     icon: "truck-outline",
-    supportedLoadSizes: ["Medium", "Large"],
+    supportedLoadSizes: ["Medium", "Large", "Extra Large", "Custom"],
   },
 ];

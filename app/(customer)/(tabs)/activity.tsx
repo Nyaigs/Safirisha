@@ -14,13 +14,17 @@ import { apiFetch } from "../../../lib/api";
 
 type TripStatus =
   | "SEARCHING"
+  | "SEARCHING_DRIVER"
   | "ACCEPTED"
+  | "DRIVER_ASSIGNED"
   | "DRIVER_EN_ROUTE"
+  | "DRIVER_ARRIVED"
   | "ARRIVED_PICKUP"
   | "PICKUP_CONFIRMED"
   | "IN_TRANSIT"
   | "ARRIVED_DROPOFF"
   | "DELIVERY_CONFIRMED"
+  | "PAYMENT_PENDING"
   | "DELIVERED"
   | "CANCELLED";
 
@@ -57,10 +61,16 @@ function getReadableStatus(status: TripStatus) {
   switch (status) {
     case "SEARCHING":
       return "Searching";
+    case "SEARCHING_DRIVER":
+      return "Finding a Driver";
     case "ACCEPTED":
       return "Driver Accepted";
+    case "DRIVER_ASSIGNED":
+      return "Driver Assigned";
     case "DRIVER_EN_ROUTE":
       return "Driver En Route";
+    case "DRIVER_ARRIVED":
+      return "Driver Arrived";
     case "ARRIVED_PICKUP":
       return "Arrived at Pickup";
     case "PICKUP_CONFIRMED":
@@ -71,6 +81,8 @@ function getReadableStatus(status: TripStatus) {
       return "Arrived at Drop-off";
     case "DELIVERY_CONFIRMED":
       return "Delivery Confirmed";
+    case "PAYMENT_PENDING":
+      return "Payment Pending";
     case "DELIVERED":
       return "Delivered";
     case "CANCELLED":
@@ -95,18 +107,22 @@ function getStatusColors(status: TripStatus) {
         text: "#dc2626",
       };
     case "SEARCHING":
+    case "SEARCHING_DRIVER":
       return {
         bg: "#fffbeb",
         border: "#f59e0b",
         text: "#b45309",
       };
     case "ACCEPTED":
+    case "DRIVER_ASSIGNED":
     case "DRIVER_EN_ROUTE":
+    case "DRIVER_ARRIVED":
     case "ARRIVED_PICKUP":
     case "PICKUP_CONFIRMED":
     case "IN_TRANSIT":
     case "ARRIVED_DROPOFF":
     case "DELIVERY_CONFIRMED":
+    case "PAYMENT_PENDING":
       return {
         bg: "#eff6ff",
         border: "#3b82f6",
@@ -124,13 +140,17 @@ function getStatusColors(status: TripStatus) {
 function isActiveStatus(status: TripStatus) {
   return [
     "SEARCHING",
+    "SEARCHING_DRIVER",
     "ACCEPTED",
+    "DRIVER_ASSIGNED",
     "DRIVER_EN_ROUTE",
+    "DRIVER_ARRIVED",
     "ARRIVED_PICKUP",
     "PICKUP_CONFIRMED",
     "IN_TRANSIT",
     "ARRIVED_DROPOFF",
     "DELIVERY_CONFIRMED",
+    "PAYMENT_PENDING",
   ].includes(status);
 }
 
@@ -138,9 +158,11 @@ export default function HistoryScreen() {
   const [trips, setTrips] = useState<TripItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchTrips = useCallback(async () => {
     try {
+      setError(null);
       const data = await apiFetch("/trips/my-trips", {
         method: "GET",
       });
@@ -167,9 +189,9 @@ export default function HistoryScreen() {
           assignedDriver: trip.assignedDriver ?? null,
         })),
       );
-    } catch (error) {
-      console.error("Failed to fetch trips:", error);
-      setTrips([]);
+    } catch (cause) {
+      console.error("Failed to fetch trips:", cause);
+      setError("We couldn't load your trips. Check your connection and try again.");
     }
   }, []);
 
@@ -275,6 +297,14 @@ export default function HistoryScreen() {
           <View style={styles.emptyWrap}>
             <ActivityIndicator size="large" color="#111827" />
             <Text style={styles.emptyText}>Loading your trips...</Text>
+          </View>
+        ) : error ? (
+          <View style={styles.emptyWrap}>
+            <Text style={styles.emptyTitle}>Trips unavailable</Text>
+            <Text style={styles.emptyText}>{error}</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={loadTrips}>
+              <Text style={styles.retryButtonText}>Try again</Text>
+            </TouchableOpacity>
           </View>
         ) : trips.length === 0 ? (
           <View style={styles.emptyWrap}>
@@ -493,6 +523,8 @@ const styles = StyleSheet.create({
     marginTop: 10,
     lineHeight: 20,
   },
+  retryButton: { marginTop: 16, backgroundColor: "#111827", borderRadius: 12, paddingHorizontal: 18, paddingVertical: 12 },
+  retryButtonText: { color: "#fff", fontWeight: "800" },
   card: {
     backgroundColor: "#f9fafb",
     borderWidth: 1,

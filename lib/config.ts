@@ -1,10 +1,16 @@
+function normalizeUrl(url: string): string {
+  return url.trim().replace(/\/+$/, "");
+}
+
 const rawHostBaseUrl =
   process.env.EXPO_PUBLIC_API_BASE_URL ||
-  process.env.EXPO_PUBLIC_API_URL ||
-  "http://192.168.50.103:5000";
+  process.env.EXPO_PUBLIC_API_URL;
 
-function normalizeUrl(url: string) {
-  return url.trim().replace(/\/+$/, "");
+if (!rawHostBaseUrl) {
+  throw new Error(
+    "[Safirisha Config] Missing EXPO_PUBLIC_API_BASE_URL or EXPO_PUBLIC_API_URL in your .env file. " +
+      "Add EXPO_PUBLIC_API_BASE_URL=http://192.168.0.27:5000/api then restart with: npx expo start --clear",
+  );
 }
 
 const normalizedHost = normalizeUrl(rawHostBaseUrl);

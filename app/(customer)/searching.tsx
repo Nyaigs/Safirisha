@@ -14,12 +14,10 @@ import {
 } from "react-native";
 import { apiFetch } from "../../lib/api";
 import { connectSocket } from "../../lib/socket";
-import { useTripStore } from "../../store/trip";
 import type {
   Trip,
   TripAcceptedPayload,
   TripExpiredPayload,
-  DriverLocationUpdatedPayload,
 } from "../../types/trip";
 
 function normalizeVehicle(value?: string) {

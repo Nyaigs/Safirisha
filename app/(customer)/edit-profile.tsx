@@ -22,7 +22,7 @@ export default function EditProfileScreen() {
 
   const [fullName, setFullName] = useState(user?.fullName ?? "");
   const [phone, setPhone] = useState(user?.phone ?? "");
-  const [email, setEmail] = useState(user?.email ?? "");
+  const email = user?.email ?? "";
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {

@@ -1,775 +1,110 @@
-import DateTimePicker from "@react-native-community/datetimepicker";
+import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { router, useFocusEffect } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from "react-native";
-import DropoffSearch from "../../../components/dropoffsearch";
-import LoadSizeSelector from "../../../components/loadsizeselector";
-import VehicleCard from "../../../components/vehiclecard";
-import { getLoadSizeByKey } from "../../../constants/loadsizes";
-import { VEHICLES, VehicleItem } from "../../../constants/vehicles";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import MapView, { MapPressEvent, Marker, Polyline, PROVIDER_GOOGLE } from "react-native-maps";
+import { BookingSheet } from "../../../components/booking/BookingSheet";
+import { BottomSheet } from "../../../components/ui/bottom-sheet";
+import { StateMessage } from "../../../components/ui/state-message";
+import { design } from "../../../constants/design";
+import { useBookingFlow } from "../../../hooks/useBookingFlow";
 import { useCustomerStore } from "../../../store/customer";
 import { useTripStore } from "../../../store/trip";
-import { AppLocation, DropoffPlace, LoadSize, VehicleId } from "../../../types";
-import { estimatePrice } from "../../../utils/pricing";
+import { AppLocation, DropoffPlace } from "../../../types";
 
-// Minimum time in minutes that a user must schedule in advance
-const MIN_SCHEDULE_MINUTES = 30;
-
-function getStatusColor(status?: string) {
-  switch (status) {
-    case "SEARCHING":
-      return { bg: "#fef3c7", text: "#b45309" };
-    case "ACCEPTED":
-    case "DRIVER_EN_ROUTE":
-    case "ARRIVED_PICKUP":
-      return { bg: "#dbeafe", text: "#1d4ed8" };
-    case "PICKUP_CONFIRMED":
-    case "IN_TRANSIT":
-    case "ARRIVED_DROPOFF":
-      return { bg: "#dcfce7", text: "#166534" };
-    default:
-      return { bg: "#f3f4f6", text: "#374151" };
-  }
-}
-
-function getGreeting() {
-  const h = new Date().getHours();
-  if (h < 12) return "Good morning";
-  if (h < 17) return "Good afternoon";
-  return "Good evening";
-}
+const nairobi = { latitude: -1.286389, longitude: 36.817223, latitudeDelta: 0.06, longitudeDelta: 0.06 };
 
 export default function HomeScreen() {
-  const [loadingLocation, setLoadingLocation] = useState(true);
-  const [loadSizeModalVisible, setLoadSizeModalVisible] = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
+  const mapRef = useRef<MapView>(null);
+  const flow = useBookingFlow();
+  const { step, choosePickup, chooseDropoff, requestPayload } = flow;
+  const [currentLocation, setCurrentLocation] = useState<AppLocation | null>(null);
+  const [loadingLocation, setLoadingLocation] = useState(false);
+  const [mapPicking, setMapPicking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const activeTrip = useCustomerStore((state) => state.activeTrip);
+  const fetchActiveTrip = useCustomerStore((state) => state.fetchActiveTrip);
 
-  const [pickupLocation, setPickupLocation] = useState<AppLocation | null>(
-    null,
-  );
-  const [dropoffLocation, setDropoffLocation] = useState<AppLocation | null>(
-    null,
-  );
+  useFocusEffect(useCallback(() => { fetchActiveTrip(); }, [fetchActiveTrip]));
+  const moveTo = useCallback((point: AppLocation) => mapRef.current?.animateToRegion({ latitude: point.latitude, longitude: point.longitude, latitudeDelta: 0.012, longitudeDelta: 0.012 }, 450), []);
 
-  const [selectedVehicle, setSelectedVehicle] = useState<VehicleId | null>(
-    null,
-  );
-  const [loadDescription, setLoadDescription] = useState("");
-  const [loadSize, setLoadSize] = useState<LoadSize | null>(null);
-  const [specialNotes, setSpecialNotes] = useState("");
-
-  // ---------- SCHEDULED TRIP STATE ----------
-  const [scheduledFor, setScheduledFor] = useState<Date | null>(null);
-  const [showDatePicker, setShowDatePicker] = useState(false);
-
-  const activeTrip = useCustomerStore((s) => s.activeTrip);
-  const recentTrips = useCustomerStore((s) => s.recentTrips);
-  const loadingDashboard = useCustomerStore((s) => s.loadingActiveTrip);
-  const refreshing = useCustomerStore((s) => s.loadingTrips);
-  const fetchActiveTrip = useCustomerStore((s) => s.fetchActiveTrip);
-  const fetchRecentTrips = useCustomerStore((s) => s.fetchRecentTrips);
-  const setCurrentRequest = useTripStore((s) => s.setCurrentRequest);
-
-  const getReadableAddress = async (latitude: number, longitude: number) => {
+  const getCurrentLocation = useCallback(async (): Promise<AppLocation | null> => {
+    setLoadingLocation(true); setError(null);
     try {
-      const results = await Location.reverseGeocodeAsync({
-        latitude,
-        longitude,
-      });
-      if (!results || results.length === 0) return "Current Location";
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (permission.status !== "granted") throw new Error("Location permission is off. Search or pin your location on the map instead.");
+      const result = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const [place] = await Location.reverseGeocodeAsync(result.coords);
+      const point = { latitude: result.coords.latitude, longitude: result.coords.longitude, address: [place?.name, place?.street, place?.district, place?.city].filter(Boolean).join(", ") || "Current location" };
+      setCurrentLocation(point); moveTo(point);
+      return point;
+    } catch (cause: unknown) {
+      setError(cause instanceof Error ? cause.message : "We could not find your location.");
+      return null;
+    } finally { setLoadingLocation(false); }
+  }, [moveTo]);
 
-      const place = results[0];
-      const parts = [
-        place.name,
-        place.street,
-        place.city,
-        place.region,
-        place.country,
-      ].filter(Boolean);
-      return parts.length > 0 ? parts.join(", ") : "Current Location";
-    } catch {
-      return "Current Location";
-    }
-  };
-
-  const getUserLocation = useCallback(async () => {
-    try {
-      setLoadingLocation(true);
-      setErrorMsg("");
-
-      const { status } = await Location.requestForegroundPermissionsAsync();
-
-      if (status !== "granted") {
-        setErrorMsg(
-          "Location permission denied. Please enable location access.",
-        );
-        return;
-      }
-
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
-      const address = await getReadableAddress(
-        location.coords.latitude,
-        location.coords.longitude,
-      );
-
-      setPickupLocation({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-        address,
-      });
-    } catch {
-      setErrorMsg("Failed to fetch your current location.");
-    } finally {
-      setLoadingLocation(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    getUserLocation();
-  }, [getUserLocation]);
-
-  useFocusEffect(
-    useCallback(() => {
-      fetchActiveTrip();
-      fetchRecentTrips();
-    }, [fetchActiveTrip, fetchRecentTrips]),
-  );
-
-  const handleDropoffSelect = (place: DropoffPlace) => {
-    setDropoffLocation({
-      latitude: place.latitude,
-      longitude: place.longitude,
-      address: place.address,
-    });
-  };
-
-  const distanceKm = useMemo(() => {
-    if (!pickupLocation || !dropoffLocation) return 0;
-    const toRad = (value: number) => (value * Math.PI) / 180;
-    const R = 6371;
-    const dLat = toRad(dropoffLocation.latitude - pickupLocation.latitude);
-    const dLng = toRad(dropoffLocation.longitude - pickupLocation.longitude);
-    const a =
-      Math.sin(dLat / 2) ** 2 +
-      Math.cos(toRad(pickupLocation.latitude)) *
-        Math.cos(toRad(dropoffLocation.latitude)) *
-        Math.sin(dLng / 2) ** 2;
-    return Number(
-      (R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))).toFixed(2),
-    );
-  }, [pickupLocation, dropoffLocation]);
-
-  const isVehicleAllowedForLoadSize = (
-    vehicleId: VehicleId,
-    selectedLoadSize: LoadSize | null,
-  ) => {
-    if (!selectedLoadSize) return true;
-    const vehicle = VEHICLES.find((item: VehicleItem) => item.id === vehicleId);
-    return vehicle
-      ? vehicle.supportedLoadSizes.includes(selectedLoadSize)
-      : false;
-  };
-
-  useEffect(() => {
-    if (!selectedVehicle || !loadSize) return;
-    const vehicle = VEHICLES.find(
-      (item: VehicleItem) => item.id === selectedVehicle,
-    );
-    if (vehicle && !vehicle.supportedLoadSizes.includes(loadSize)) {
-      setSelectedVehicle(null);
-    }
-  }, [loadSize, selectedVehicle]);
-
-  const estimatedPrice = estimatePrice(selectedVehicle, loadSize, distanceKm);
-  const selectedVehicleItem =
-    VEHICLES.find((vehicle: VehicleItem) => vehicle.id === selectedVehicle) ||
-    null;
-  const selectedLoadSizeInfo = getLoadSizeByKey(loadSize);
-
-  const canContinue =
-    !!selectedVehicle &&
-    !!pickupLocation &&
-    !!dropoffLocation &&
-    !!loadDescription.trim() &&
-    !!loadSize &&
-    !loadingLocation;
-
-  const handleContinue = () => {
-    if (
-      !canContinue ||
-      !pickupLocation ||
-      !dropoffLocation ||
-      !selectedVehicle ||
-      !loadSize
-    ) {
+  useEffect(() => { void getCurrentLocation(); }, [getCurrentLocation]);
+  const useCurrentLocation = useCallback(async () => {
+    const point = await getCurrentLocation();
+    if (!point) return;
+    if (step === "dropoff") chooseDropoff(point);
+    else choosePickup(point);
+  }, [chooseDropoff, choosePickup, getCurrentLocation, step]);
+  const chooseSearch = useCallback((place: DropoffPlace) => { const point = { ...place, placeId: place.id }; moveTo(point); if (step === "pickup") choosePickup(point); else chooseDropoff(point); }, [chooseDropoff, choosePickup, moveTo, step]);
+  const mapPress = useCallback(async (event: MapPressEvent) => {
+    if (!mapPicking) return;
+    const point = { ...event.nativeEvent.coordinate, address: "Pinned location" };
+    try { const [place] = await Location.reverseGeocodeAsync(point); point.address = [place?.name, place?.street, place?.district, place?.city].filter(Boolean).join(", ") || point.address; } catch { /* keep pin label */ }
+    if (step === "pickup") choosePickup(point); else if (step === "dropoff") chooseDropoff(point);
+    setMapPicking(false);
+  }, [chooseDropoff, choosePickup, mapPicking, step]);
+  const submit = useCallback(async () => {
+    if (!requestPayload) {
       Alert.alert(
-        "Incomplete request",
-        "Please complete pickup, drop-off, load description, load size, and vehicle selection.",
+        "Choose a different drop-off",
+        "Pickup and drop-off must be different locations before we can request a driver.",
       );
       return;
     }
 
-    setCurrentRequest({
-      pickupAddress: pickupLocation.address || "",
-      pickupLat: pickupLocation.latitude,
-      pickupLng: pickupLocation.longitude,
-      dropoffAddress: dropoffLocation.address || "",
-      dropoffLat: dropoffLocation.latitude,
-      dropoffLng: dropoffLocation.longitude,
-      vehicleType: selectedVehicle,
-      loadDescription: loadDescription.trim(),
-      loadSize,
-      specialNotes: specialNotes.trim(),
-      estimatedPrice,
-      distanceKm,
-      scheduledFor: scheduledFor ? scheduledFor.toISOString() : null,
-    });
+    const createRequest = async () => {
+      setSubmitting(true);
+      useTripStore.getState().setCurrentRequest(requestPayload);
+      const tripId = await useTripStore.getState().createTrip();
+      setSubmitting(false);
+      if (!tripId) return Alert.alert("Request failed", useTripStore.getState().error || "Please try again.");
+      const createdTrip = useTripStore.getState().currentTrip;
+      router.replace({ pathname: "/(customer)/searching", params: { tripId, pickup: createdTrip?.pickupAddress || requestPayload.pickupAddress, dropoff: createdTrip?.dropoffAddress || requestPayload.dropoffAddress, vehicleType: createdTrip?.vehicleType || requestPayload.vehicleType, loadSize: createdTrip?.loadSize || requestPayload.loadSize, estimatedPrice: String(createdTrip?.estimatedPrice ?? requestPayload.estimatedPrice), distanceKm: String(createdTrip?.distanceKm ?? requestPayload.distanceKm) } });
+    };
 
-    router.push({
-      pathname: "/(customer)/request",
-      params: {
-        pickup: pickupLocation.address || "",
-        pickupLat: String(pickupLocation.latitude),
-        pickupLng: String(pickupLocation.longitude),
-        dropoff: dropoffLocation.address || "",
-        dropoffLat: String(dropoffLocation.latitude),
-        dropoffLng: String(dropoffLocation.longitude),
-        vehicleType: selectedVehicle,
-        vehicle: selectedVehicle,
-        loadDescription: loadDescription.trim(),
-        loadSize,
-        specialNotes: specialNotes.trim(),
-        estimatedPrice: String(estimatedPrice),
-        distanceKm: String(distanceKm),
-        scheduledFor: scheduledFor ? scheduledFor.toISOString() : null,
-      },
-    });
-  };
+    if (flow.distanceKm < 0.05) {
+      Alert.alert(
+        "Very short trip",
+        "Pickup and drop-off are very close. Is this intentional?",
+        [
+          { text: "Edit locations", style: "cancel" },
+          { text: "Continue", onPress: () => void createRequest() },
+        ],
+      );
+      return;
+    }
 
-  const onRefresh = () => {
-    fetchActiveTrip();
-    fetchRecentTrips();
-  };
+    await createRequest();
+  }, [flow.distanceKm, requestPayload]);
 
-  const activeStatusColors = activeTrip
-    ? getStatusColor(activeTrip.status)
-    : null;
-
-  // Compute minimum allowed date for scheduling (now + 30 minutes)
-  const minScheduleDate = useMemo(() => {
-    const now = new Date();
-    return new Date(now.getTime() + MIN_SCHEDULE_MINUTES * 60000);
-  }, []);
-
-  return (
-    <View style={styles.screen}>
-      <ScrollView
-        contentContainerStyle={styles.scrollContainer}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-      >
-        <View style={styles.container}>
-          <Text style={styles.greeting}>{getGreeting()}!</Text>
-          <Text style={styles.title}>Request Transport</Text>
-          <Text style={styles.subtitle}>
-            Move stock, household items, parcels, or business goods with the
-            right vehicle.
-          </Text>
-
-          {!loadingDashboard && activeTrip && activeStatusColors ? (
-            <TouchableOpacity
-              style={[
-                styles.activeTripCard,
-                { backgroundColor: activeStatusColors.bg },
-              ]}
-              activeOpacity={0.85}
-              onPress={() =>
-                router.push({
-                  pathname: "/(customer)/live-trip",
-                  params: { tripId: activeTrip.id },
-                })
-              }
-            >
-              <View style={styles.activeTripTop}>
-                <Text
-                  style={[
-                    styles.activeTripLabel,
-                    { color: activeStatusColors.text },
-                  ]}
-                >
-                  Active Trip
-                </Text>
-                <Text
-                  style={[
-                    styles.activeTripStatus,
-                    { color: activeStatusColors.text },
-                  ]}
-                >
-                  {activeTrip.status.replace(/_/g, " ")}
-                </Text>
-              </View>
-              <Text style={styles.activeTripRoute} numberOfLines={2}>
-                {activeTrip.pickupAddress} → {activeTrip.dropoffAddress}
-              </Text>
-              <View style={styles.activeTripBottom}>
-                <Text style={styles.activeTripPrice}>
-                  KES {Number(activeTrip.estimatedPrice || 0).toLocaleString()}
-                </Text>
-                <Text
-                  style={[
-                    styles.activeTripView,
-                    { color: activeStatusColors.text },
-                  ]}
-                >
-                  View Trip →
-                </Text>
-              </View>
-            </TouchableOpacity>
-          ) : null}
-
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Pickup Location</Text>
-            {loadingLocation ? (
-              <View style={styles.loadingWrap}>
-                <ActivityIndicator color="#111827" />
-                <Text style={styles.loadingText}>
-                  Fetching your location...
-                </Text>
-              </View>
-            ) : (
-              <>
-                <Text style={styles.locationValue}>
-                  {pickupLocation?.address || "Location not available"}
-                </Text>
-                <TouchableOpacity
-                  style={styles.secondaryButton}
-                  onPress={getUserLocation}
-                >
-                  <Text style={styles.secondaryButtonText}>
-                    Refresh Pickup Location
-                  </Text>
-                </TouchableOpacity>
-              </>
-            )}
-            {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
-          </View>
-
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Drop-off Location</Text>
-            <DropoffSearch onSelect={handleDropoffSelect} />
-            {dropoffLocation ? (
-              <View style={styles.previewBox}>
-                <Text style={styles.previewLabel}>Selected Drop-off</Text>
-                <Text style={styles.previewValue}>
-                  {dropoffLocation.address}
-                </Text>
-              </View>
-            ) : null}
-          </View>
-
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Load Description</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Example: Boxes, electronics, groceries, furniture..."
-              value={loadDescription}
-              onChangeText={setLoadDescription}
-              multiline
-            />
-          </View>
-
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Load Size</Text>
-            <TouchableOpacity
-              style={styles.selectorButton}
-              onPress={() => setLoadSizeModalVisible(true)}
-            >
-              <Text style={styles.selectorButtonText}>
-                {selectedLoadSizeInfo
-                  ? `${selectedLoadSizeInfo.label} — ${selectedLoadSizeInfo.weightRange}`
-                  : "Select load size"}
-              </Text>
-            </TouchableOpacity>
-            {selectedLoadSizeInfo ? (
-              <View style={styles.previewBox}>
-                <Text style={styles.previewLabel}>Selected Load Size</Text>
-                <Text style={styles.previewValue}>
-                  {selectedLoadSizeInfo.description}
-                </Text>
-              </View>
-            ) : null}
-          </View>
-
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Special Notes</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Optional notes for the transporter"
-              value={specialNotes}
-              onChangeText={setSpecialNotes}
-              multiline
-            />
-          </View>
-
-          {/* ---------- SCHEDULED TRIP SECTION ---------- */}
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Schedule Trip (Optional)</Text>
-            <TouchableOpacity
-              style={styles.selectorButton}
-              onPress={() => setShowDatePicker(true)}
-            >
-              <Text style={styles.selectorButtonText}>
-                {scheduledFor
-                  ? `Scheduled for: ${scheduledFor.toLocaleString()}`
-                  : `Tap to set a future pickup time (min ${MIN_SCHEDULE_MINUTES} min from now)`}
-              </Text>
-            </TouchableOpacity>
-            {showDatePicker && (
-              <DateTimePicker
-                value={scheduledFor || minScheduleDate}
-                mode="datetime"
-                display="default"
-                minimumDate={minScheduleDate}
-                onChange={(event, selectedDate) => {
-                  setShowDatePicker(false);
-                  if (selectedDate) {
-                    // Enforce minimum schedule time
-                    const now = new Date();
-                    const minAllowed = new Date(
-                      now.getTime() + MIN_SCHEDULE_MINUTES * 60000,
-                    );
-                    if (selectedDate < minAllowed) {
-                      Alert.alert(
-                        "Too Soon",
-                        `Please schedule at least ${MIN_SCHEDULE_MINUTES} minutes from now.`,
-                      );
-                      return;
-                    }
-                    setScheduledFor(selectedDate);
-                  }
-                }}
-              />
-            )}
-            {scheduledFor && (
-              <TouchableOpacity
-                style={styles.clearButton}
-                onPress={() => setScheduledFor(null)}
-              >
-                <Text style={styles.clearButtonText}>Clear Schedule</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Choose Vehicle</Text>
-            {VEHICLES.map((vehicle: VehicleItem) => {
-              const allowed = isVehicleAllowedForLoadSize(vehicle.id, loadSize);
-              return (
-                <VehicleCard
-                  key={vehicle.id}
-                  name={vehicle.name}
-                  capacity={vehicle.capacity}
-                  icon={vehicle.icon}
-                  isSelected={selectedVehicle === vehicle.id}
-                  onPress={() => setSelectedVehicle(vehicle.id)}
-                  price={
-                    allowed
-                      ? estimatePrice(vehicle.id, loadSize, distanceKm)
-                      : undefined
-                  }
-                  disabled={!allowed}
-                />
-              );
-            })}
-          </View>
-
-          <View style={styles.summaryCard}>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Selected Vehicle</Text>
-              <Text style={styles.summaryValue}>
-                {selectedVehicleItem?.name || "Not selected"}
-              </Text>
-            </View>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Distance</Text>
-              <Text style={styles.summaryValue}>{distanceKm} km</Text>
-            </View>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Estimated Price</Text>
-              <Text style={styles.summaryPrice}>KES {estimatedPrice}</Text>
-            </View>
-          </View>
-
-          <TouchableOpacity
-            style={[
-              styles.primaryButton,
-              !canContinue ? styles.primaryButtonDisabled : null,
-            ]}
-            disabled={!canContinue}
-            onPress={handleContinue}
-          >
-            <Text style={styles.primaryButtonText}>Continue to Review</Text>
-          </TouchableOpacity>
-
-          {!loadingDashboard && recentTrips.length > 0 ? (
-            <View style={styles.recentSection}>
-              <Text style={styles.recentTitle}>Recent Trips</Text>
-              {recentTrips.map((trip) => {
-                const sc = getStatusColor(trip.status);
-                return (
-                  <TouchableOpacity
-                    key={trip.id}
-                    style={styles.recentCard}
-                    activeOpacity={0.85}
-                    onPress={() =>
-                      router.push({
-                        pathname: "/(customer)/live-trip",
-                        params: { tripId: trip.id },
-                      })
-                    }
-                  >
-                    <View style={styles.recentLeft}>
-                      <Text style={styles.recentRoute} numberOfLines={1}>
-                        {trip.pickupAddress} → {trip.dropoffAddress}
-                      </Text>
-                      <Text style={styles.recentDate}>
-                        {new Date(trip.createdAt).toLocaleDateString()}
-                      </Text>
-                    </View>
-                    <View
-                      style={[styles.recentBadge, { backgroundColor: sc.bg }]}
-                    >
-                      <Text
-                        style={[styles.recentBadgeText, { color: sc.text }]}
-                      >
-                        {trip.status.replace(/_/g, " ")}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          ) : null}
-        </View>
-      </ScrollView>
-
-      <LoadSizeSelector
-        visible={loadSizeModalVisible}
-        selectedValue={loadSize}
-        onClose={() => setLoadSizeModalVisible(false)}
-        onSelect={(value: LoadSize) => setLoadSize(value)}
-      />
-    </View>
-  );
+  if (activeTrip) return <View style={styles.active}><Text style={styles.activeTitle}>You have an active delivery</Text><Text style={styles.activeText}>{activeTrip.pickupAddress} → {activeTrip.dropoffAddress}</Text><TouchableOpacity onPress={() => router.push({ pathname: "/(customer)/live-trip", params: { tripId: activeTrip.id } })} style={styles.activeButton}><Text style={styles.activeButtonText}>Track delivery</Text></TouchableOpacity></View>;
+  return <View style={styles.screen}>
+    <MapView ref={mapRef} provider={PROVIDER_GOOGLE} style={StyleSheet.absoluteFill} initialRegion={currentLocation ? { latitude: currentLocation.latitude, longitude: currentLocation.longitude, latitudeDelta: 0.04, longitudeDelta: 0.04 } : nairobi} showsUserLocation showsMyLocationButton onPress={mapPress}>
+      {flow.pickup && <Marker coordinate={flow.pickup} pinColor={design.colors.success} title="Pickup" />}{flow.dropoff && <Marker coordinate={flow.dropoff} pinColor={design.colors.danger} title="Drop-off" />}{flow.pickup && flow.dropoff && <Polyline coordinates={[flow.pickup, flow.dropoff]} strokeColor={design.colors.brand} strokeWidth={4} />}
+    </MapView>
+    <View style={styles.topBar}><View style={styles.brand}><Text style={styles.brandText}>Safirisha</Text></View><TouchableOpacity style={styles.profile} onPress={() => router.push("/(customer)/(tabs)/account")}><Ionicons name="person-outline" size={21} color={design.colors.ink} /></TouchableOpacity></View>
+    {mapPicking && <View style={styles.mapHint}><Text style={styles.mapHintText}>Tap the map to set your {flow.step} location</Text></View>}{error && <View style={styles.error}><StateMessage tone="error" title="Location unavailable" description={error} /><TouchableOpacity style={styles.manualLocation} onPress={() => { setError(null); flow.setStep(flow.step === "idle" ? "pickup" : flow.step); }}><Text style={styles.manualLocationText}>Choose a location manually</Text></TouchableOpacity></View>}
+    <BottomSheet visible snapPoints={[30, 60, 90]} initialSnap={flow.step === "idle" ? 0 : 1}>
+      <BookingSheet flow={flow} currentLocation={currentLocation} loadingLocation={loadingLocation} submitting={submitting} onCurrentLocation={useCurrentLocation} onMapPick={() => setMapPicking(true)} onSearch={chooseSearch} onSubmit={submit} />
+    </BottomSheet>
+  </View>;
 }
-
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#ffffff" },
-  scrollContainer: { paddingBottom: 28 },
-  container: {
-    flex: 1,
-    padding: 16,
-    paddingTop: 56,
-    backgroundColor: "#ffffff",
-  },
-  greeting: {
-    fontSize: 16,
-    color: "#6b7280",
-    fontWeight: "600",
-    marginBottom: 2,
-  },
-  title: { fontSize: 28, fontWeight: "800", color: "#111827", marginBottom: 6 },
-  subtitle: {
-    fontSize: 15,
-    color: "#6b7280",
-    marginBottom: 18,
-    lineHeight: 22,
-  },
-
-  activeTripCard: {
-    borderRadius: 20,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: "transparent",
-  },
-  activeTripTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  activeTripLabel: {
-    fontSize: 12,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  activeTripStatus: {
-    fontSize: 13,
-    fontWeight: "900",
-    textTransform: "capitalize",
-  },
-  activeTripRoute: {
-    fontSize: 14,
-    color: "#374151",
-    fontWeight: "600",
-    marginBottom: 10,
-    lineHeight: 20,
-  },
-  activeTripBottom: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  activeTripPrice: { fontSize: 18, fontWeight: "900", color: "#111827" },
-  activeTripView: { fontSize: 14, fontWeight: "800" },
-
-  sectionCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    padding: 16,
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: "#111827",
-    marginBottom: 12,
-  },
-  loadingWrap: { flexDirection: "row", alignItems: "center" },
-  loadingText: { marginLeft: 10, color: "#6b7280", fontSize: 14 },
-  locationValue: {
-    fontSize: 15,
-    color: "#111827",
-    lineHeight: 21,
-    marginBottom: 12,
-  },
-  input: {
-    minHeight: 54,
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: "#111827",
-    textAlignVertical: "top",
-  },
-  selectorButton: {
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-  },
-  selectorButtonText: { fontSize: 15, color: "#111827", lineHeight: 20 },
-  previewBox: {
-    marginTop: 12,
-    backgroundColor: "#f9fafb",
-    borderRadius: 12,
-    padding: 12,
-  },
-  previewLabel: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#6b7280",
-    textTransform: "uppercase",
-    marginBottom: 4,
-  },
-  previewValue: { fontSize: 14, color: "#111827", lineHeight: 20 },
-  summaryCard: {
-    backgroundColor: "#111827",
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 16,
-  },
-  summaryRow: { marginBottom: 10 },
-  summaryLabel: {
-    fontSize: 12,
-    color: "#9ca3af",
-    fontWeight: "700",
-    textTransform: "uppercase",
-    marginBottom: 4,
-  },
-  summaryValue: { fontSize: 15, color: "#ffffff", fontWeight: "600" },
-  summaryPrice: { fontSize: 20, color: "#ffffff", fontWeight: "800" },
-  primaryButton: {
-    backgroundColor: "#111827",
-    borderRadius: 14,
-    paddingVertical: 15,
-    alignItems: "center",
-  },
-  primaryButtonDisabled: { opacity: 0.55 },
-  primaryButtonText: { color: "#ffffff", fontWeight: "700", fontSize: 15 },
-  secondaryButton: {
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    paddingVertical: 13,
-    alignItems: "center",
-  },
-  secondaryButtonText: { color: "#111827", fontWeight: "700", fontSize: 14 },
-  errorText: { marginTop: 10, color: "#b91c1c", fontSize: 14 },
-
-  // NEW styles for scheduled trip
-  clearButton: {
-    marginTop: 10,
-    alignSelf: "flex-start",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: "#fee2e2",
-    borderRadius: 8,
-  },
-  clearButtonText: {
-    color: "#b91c1c",
-    fontWeight: "700",
-    fontSize: 13,
-  },
-
-  recentSection: { marginTop: 18, marginBottom: 10 },
-  recentTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#111827",
-    marginBottom: 12,
-  },
-  recentCard: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    padding: 14,
-    marginBottom: 10,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  recentLeft: { flex: 1, marginRight: 10 },
-  recentRoute: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#111827",
-    marginBottom: 4,
-  },
-  recentDate: { fontSize: 12, color: "#9ca3af" },
-  recentBadge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
-  recentBadgeText: { fontSize: 11, fontWeight: "900" },
-});
+const styles = StyleSheet.create({ screen: { flex: 1 }, topBar: { position: "absolute", top: 56, left: 16, right: 16, flexDirection: "row", justifyContent: "space-between" }, brand: { backgroundColor: design.colors.surface, paddingHorizontal: 14, paddingVertical: 10, borderRadius: design.radius.pill, ...design.shadow }, brandText: { ...design.typography.heading, color: design.colors.brand }, profile: { width: 44, height: 44, borderRadius: 22, backgroundColor: design.colors.surface, alignItems: "center", justifyContent: "center", ...design.shadow }, mapHint: { position: "absolute", top: 116, alignSelf: "center", backgroundColor: design.colors.ink, padding: 10, borderRadius: 10 }, mapHintText: { color: design.colors.white, ...design.typography.caption }, error: { position: "absolute", top: 116, left: 16, right: 16 }, manualLocation: { backgroundColor: design.colors.surface, alignItems: "center", paddingVertical: 10, borderBottomLeftRadius: design.radius.md, borderBottomRightRadius: design.radius.md }, manualLocationText: { ...design.typography.label, color: design.colors.brand }, active: { flex: 1, padding: 24, justifyContent: "center", backgroundColor: design.colors.subtle }, activeTitle: { ...design.typography.title, color: design.colors.ink }, activeText: { ...design.typography.body, color: design.colors.muted, marginTop: 8 }, activeButton: { backgroundColor: design.colors.brand, padding: 16, borderRadius: design.radius.md, marginTop: 20, alignItems: "center" }, activeButtonText: { color: design.colors.white, ...design.typography.label } });

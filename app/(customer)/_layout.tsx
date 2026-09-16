@@ -39,6 +39,7 @@ export default function CustomerLayout() {
         <Stack.Screen name="searching" />
         <Stack.Screen name="driver-found" />
         <Stack.Screen name="live-trip" />
+        <Stack.Screen name="rate-trip" />
         <Stack.Screen name="settings" />
         <Stack.Screen name="privacy" />
         <Stack.Screen name="edit-profile" />

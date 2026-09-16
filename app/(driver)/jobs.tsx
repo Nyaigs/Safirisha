@@ -68,6 +68,12 @@ function formatVehicleLabel(vehicle?: string | null) {
   return String(vehicle || "Transport Vehicle").replace(/_/g, " ");
 }
 
+function formatOfferTime(expiresAt?: string | null, now = Date.now()) {
+  if (!expiresAt) return null;
+  const seconds = Math.max(0, Math.floor((new Date(expiresAt).getTime() - now) / 1000));
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
 export default function DriverJobsScreen() {
   const user = useAuthStore((state) => state.user);
   const driver = user?.driverProfile;
@@ -76,6 +82,7 @@ export default function DriverJobsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [acceptingTripId, setAcceptingTripId] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
 
   const isMountedRef = useRef(true);
 
@@ -156,6 +163,12 @@ export default function DriverJobsScreen() {
       isMountedRef.current = false;
     };
   }, [refreshAll]);
+
+  useEffect(() => {
+    if (!jobs.some((job) => job.expiresAt)) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [jobs]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -288,6 +301,7 @@ export default function DriverJobsScreen() {
       renderItem={({ item }) => {
         const isAccepting = acceptingTripId === item.id;
         const vehicleIcon = getVehicleIcon(item.vehicleType);
+        const offerTime = formatOfferTime(item.expiresAt, now);
 
         return (
           <View style={styles.card}>
@@ -313,8 +327,18 @@ export default function DriverJobsScreen() {
                 <Text style={styles.priceBadgeText}>
                   KES {Number(item.estimatedPrice ?? 0).toLocaleString()}
                 </Text>
+                <Text style={styles.payoutLabel}>Trip fare</Text>
               </View>
             </View>
+
+            {offerTime ? (
+              <View style={styles.offerExpiry}>
+                <Ionicons name="time-outline" size={15} color="#A86108" />
+                <Text style={styles.offerExpiryText}>
+                  {offerTime === "0:00" ? "Offer expiring — refresh jobs" : `Offer expires in ${offerTime}`}
+                </Text>
+              </View>
+            ) : null}
 
             <Text style={styles.label}>Pickup</Text>
             <Text style={styles.value}>{item.pickupAddress}</Text>
@@ -445,6 +469,9 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     fontSize: 12,
   },
+  payoutLabel: { color: "#CBD5E1", fontSize: 10, fontWeight: "700", marginTop: 2, textAlign: "right" },
+  offerExpiry: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#FFF3D8", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, marginBottom: 2 },
+  offerExpiryText: { color: "#A86108", fontSize: 12, fontWeight: "800" },
   label: {
     fontSize: 12,
     fontWeight: "800",

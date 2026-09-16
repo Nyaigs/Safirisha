@@ -75,7 +75,7 @@ export async function getAdminDashboard(req: AuthRequest, res: Response) {
          },
        }),
        prisma.transportRequest.count({
-         where: { status: "COMPLETED" },
+         where: { status: { in: ["DELIVERED", "COMPLETED"] } },
        }),
       prisma.transportRequest.count({
         where: { status: "CANCELLED" },
@@ -115,12 +115,10 @@ export async function getAdminDashboard(req: AuthRequest, res: Response) {
          _sum: {
            estimatedPrice: true,
          },
-         where: {
-           status: "COMPLETED",
-         },
+         where: { status: { in: ["DELIVERED", "COMPLETED"] } },
        }),
       prisma.transportRequest.findMany({
-        take: 8,
+        take: 5,
         orderBy: { createdAt: "desc" },
         include: {
           customer: {

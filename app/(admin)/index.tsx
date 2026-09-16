@@ -11,6 +11,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { StateMessage } from "../../components/ui/state-message";
 import { disconnectSocket } from "../../lib/socket";
 import { useAuthStore } from "../../store/auth";
 import {
@@ -115,12 +117,14 @@ function RecentOrderCard({ order }: { order: RecentOrder }) {
 }
 
 export default function AdminDashboardScreen() {
+  const insets = useSafeAreaInsets();
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const stats = useAdminStore((s) => s.stats);
   const recentOrders = useAdminStore((s) => s.recentOrders);
   const loading = useAdminStore((s) => s.loading);
   const refreshing = useAdminStore((s) => s.refreshing);
+  const error = useAdminStore((s) => s.error);
   const fetchDashboard = useAdminStore((s) => s.fetchDashboard);
   const setRefreshing = useAdminStore((s) => s.setRefreshing);
 
@@ -158,6 +162,21 @@ export default function AdminDashboardScreen() {
     );
   }
 
+  if (error) {
+    return (
+      <View style={styles.center}>
+        <StateMessage
+          tone="error"
+          title="Dashboard unavailable"
+          description="We couldn't load live platform data. Check your connection and try again."
+        />
+        <TouchableOpacity style={styles.retryButton} onPress={fetchDashboard}>
+          <Text style={styles.retryButtonText}>Try again</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.root}>
       <Pressable style={styles.flex} onPress={() => menuOpen && setMenuOpen(false)}>
@@ -167,7 +186,7 @@ export default function AdminDashboardScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.hero}>
+          <View style={[styles.hero, { paddingTop: insets.top + 18 }]}>
             <View style={styles.heroTop}>
               <View style={styles.heroBrand}>
                 <View style={styles.logoWrap}>
@@ -215,9 +234,9 @@ export default function AdminDashboardScreen() {
               </Text>
 
               <View style={styles.overviewGrid}>
-                <StatCard label="Total Requests" value={stats.totalOrders} icon="cube-outline" />
                 <StatCard label="Active Trips" value={stats.activeTrips} icon="navigate-outline" />
                 <StatCard label="Online Drivers" value={stats.onlineDrivers} icon="car-sport-outline" />
+                <StatCard label="Pending approvals" value={stats.pendingDrivers} icon="time-outline" />
                 <StatCard label="Revenue" value={`KES ${Number(stats.deliveredRevenue).toLocaleString()}`} icon="cash-outline" />
               </View>
             </View>
@@ -231,36 +250,12 @@ export default function AdminDashboardScreen() {
             <WorkspaceCard title="System & Settings" subtitle="Open admin settings, profile, and password controls." icon="settings-outline" accent="#7c3aed" onPress={() => router.push("/(admin)/profile")} />
           </View>
 
-          <Text style={styles.sectionTitle}>Users Center</Text>
+          <Text style={styles.sectionTitle}>Attention required</Text>
           <View style={styles.grid2}>
-            <ShortcutCard label="Customers" value={stats.totalCustomers} icon="person-outline" onPress={() => router.push({ pathname: "/(admin)/users", params: { role: "CUSTOMER" } })} />
-            <ShortcutCard label="Drivers" value={stats.totalDrivers} icon="car-outline" onPress={() => router.push({ pathname: "/(admin)/users", params: { role: "DRIVER" } })} />
-            <ShortcutCard label="Admins" value={stats.totalAdmins} icon="shield-checkmark-outline" onPress={() => router.push({ pathname: "/(admin)/users", params: { role: "ADMIN" } })} />
-            <ShortcutCard label="Pending Drivers" value={stats.pendingDrivers} icon="time-outline" onPress={() => router.push({ pathname: "/(admin)/users", params: { role: "DRIVER", driverApproval: "PENDING" } })} />
-            <ShortcutCard label="Create User" value="New" icon="person-add-outline" onPress={() => router.push("/(admin)/create-user")} />
-          </View>
-
-          <Text style={styles.sectionTitle}>Platform Snapshot</Text>
-          <View style={styles.grid2}>
-            {[
-              { label: "Active Trips", value: stats.activeTrips },
-              { label: "Pending Orders", value: stats.pendingOrders },
-              { label: "Delivered Trips", value: stats.deliveredTrips },
-              { label: "Cancelled Trips", value: stats.cancelledTrips },
-              { label: "Online Drivers", value: stats.onlineDrivers },
-              { label: "Busy Drivers", value: stats.busyDrivers },
-              { label: "Pending Drivers", value: stats.pendingDrivers },
-              { label: "Approved Drivers", value: stats.approvedDrivers },
-              { label: "Rejected Drivers", value: stats.rejectedDrivers },
-              { label: "Total Users", value: stats.totalUsers },
-              { label: "Active Users", value: stats.activeUsers },
-              { label: "Suspended Users", value: stats.suspendedUsers },
-            ].map((item) => (
-              <View key={item.label} style={styles.snapshotCard}>
-                <Text style={styles.snapshotValue}>{item.value}</Text>
-                <Text style={styles.snapshotLabel}>{item.label}</Text>
-              </View>
-            ))}
+            <ShortcutCard label="Pending drivers" value={stats.pendingDrivers} icon="time-outline" onPress={() => router.push({ pathname: "/(admin)/users", params: { role: "DRIVER", driverApproval: "PENDING" } })} />
+            <ShortcutCard label="Open requests" value={stats.pendingOrders} icon="cube-outline" onPress={() => router.push("/(admin)/trips")} />
+            <ShortcutCard label="Busy drivers" value={stats.busyDrivers} icon="car-outline" onPress={() => router.push({ pathname: "/(admin)/users", params: { role: "DRIVER" } })} />
+            <ShortcutCard label="Create user" value="New" icon="person-add-outline" onPress={() => router.push("/(admin)/create-user")} />
           </View>
 
           <Text style={styles.sectionTitle}>Recent Orders</Text>
@@ -285,10 +280,12 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   scroll: { flex: 1, backgroundColor: "#f3f4f6" },
   content: { paddingBottom: 28 },
-  center: { flex: 1, justifyContent: "center", alignItems: "center" },
+  center: { flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 20 },
   loadingText: { marginTop: 10, color: "#64748b" },
+  retryButton: { marginTop: 16, backgroundColor: "#0f172a", borderRadius: 12, paddingHorizontal: 18, paddingVertical: 12 },
+  retryButtonText: { color: "#fff", fontWeight: "800" },
 
-  hero: { backgroundColor: "#09090b", paddingHorizontal: 16, paddingTop: 18, paddingBottom: 22 },
+  hero: { backgroundColor: "#09090b", paddingHorizontal: 16, paddingBottom: 22 },
   heroTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 10, zIndex: 10 },
   heroBrand: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
   logoWrap: { width: 64, height: 64, borderRadius: 20, backgroundColor: "#18181b", borderWidth: 1, borderColor: "#27272a", justifyContent: "center", alignItems: "center" },

@@ -76,7 +76,7 @@ export async function choosePaymentMethod(req: AuthRequest, res: Response) {
       return res.status(403).json({ message: "Not your trip" });
     }
 
-     if (!["COMPLETED_PENDING_CONFIRMATION", "PAYMENT_PENDING"].includes(trip.status)) {
+     if (!["DELIVERY_CONFIRMED", "COMPLETED_PENDING_CONFIRMATION", "PAYMENT_PENDING"].includes(trip.status)) {
        return res.status(400).json({
          message: "Payment only allowed after delivery confirmation",
        });
@@ -97,7 +97,7 @@ export async function choosePaymentMethod(req: AuthRequest, res: Response) {
        data: {
          paymentMethod,
          paymentStatus: paymentMethod === "CASH" ? "PENDING" : "UNPAID",
-         status: "COMPLETED_PENDING_CONFIRMATION",
+         status: "PAYMENT_PENDING",
        },
        include: buildTripInclude(),
      });
@@ -134,12 +134,20 @@ export async function initiateMpesaPayment(req: AuthRequest, res: Response) {
       return res.status(403).json({ message: "Not your trip" });
     }
 
-    if (!["COMPLETED_PENDING_CONFIRMATION", "PAYMENT_PENDING"].includes(trip.status)) {
+    if (!["DELIVERY_CONFIRMED", "COMPLETED_PENDING_CONFIRMATION", "PAYMENT_PENDING"].includes(trip.status)) {
       return res.status(400).json({ message: "Invalid trip state" });
     }
 
     if (trip.paymentStatus === "PAID") {
       return res.status(400).json({ message: "Already paid" });
+    }
+
+    const simulate = process.env.MPESA_SIMULATE === "true";
+    if (!simulate) {
+      return res.status(503).json({
+        message:
+          "M-Pesa payments are not configured yet. Choose cash or contact support.",
+      });
     }
 
     const financials = calculateTripEarnings(
@@ -152,7 +160,7 @@ export async function initiateMpesaPayment(req: AuthRequest, res: Response) {
        data: {
          paymentMethod: "MPESA",
          paymentStatus: "PENDING",
-         status: "COMPLETED_PENDING_CONFIRMATION",
+         status: "PAYMENT_PENDING",
          platformFeeAmount: financials.platformFeeAmount,
          driverNetEarning: financials.driverNetEarning,
          mpesaCheckoutRequestId: `SIM-${Date.now()}-${trip.id}`,
@@ -162,16 +170,13 @@ export async function initiateMpesaPayment(req: AuthRequest, res: Response) {
 
     emitTripUpdated(req, pendingTrip);
 
-    const simulate =
-      process.env.MPESA_SIMULATE === "true" || !process.env.MPESA_CONSUMER_KEY;
-
     if (simulate) {
       const completedTrip = await prisma.$transaction(async (tx) => {
          const updated = await tx.transportRequest.update({
            where: { id: tripId },
            data: {
              paymentStatus: "PAID",
-             status: "COMPLETED",
+             status: "DELIVERED",
              paidAt: new Date(),
              completedAt: new Date(),
              mpesaReceiptNumber: `SIM-${Date.now()}`,
@@ -198,11 +203,6 @@ export async function initiateMpesaPayment(req: AuthRequest, res: Response) {
       });
     }
 
-    return res.json({
-      message: "MPESA STK push initiated (mock)",
-      simulated: false,
-      trip: pendingTrip,
-    });
   } catch (error) {
     console.error("initiateMpesaPayment error:", error);
     return res.status(500).json({ message: "Server error" });
@@ -243,6 +243,10 @@ export async function confirmCashPaymentByDriver(
       return res.status(400).json({ message: "Not cash trip" });
     }
 
+    if (trip.status !== "PAYMENT_PENDING") {
+      return res.status(400).json({ message: "Cash can only be confirmed after delivery." });
+    }
+
     if (trip.paymentStatus === "PAID") {
       return res.status(400).json({ message: "Already paid" });
     }
@@ -257,7 +261,7 @@ export async function confirmCashPaymentByDriver(
            where: { id: tripId },
            data: {
              paymentStatus: "PAID",
-             status: "COMPLETED",
+             status: "DELIVERED",
              cashConfirmedByDriver: true,
              paidAt: new Date(),
              completedAt: new Date(),
@@ -307,7 +311,7 @@ export async function getDriverEarningsSummary(
      const trips = await prisma.transportRequest.findMany({
        where: {
          assignedDriverId: driver.id,
-         status: "COMPLETED",
+         status: { in: ["DELIVERED", "COMPLETED"] },
          paymentStatus: "PAID",
        },
        orderBy: { updatedAt: "desc" },

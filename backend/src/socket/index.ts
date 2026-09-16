@@ -125,28 +125,14 @@ export function initSocket(server: HttpServer) {
     socket.on("driver:online", async () => {
       if (user.role !== "DRIVER") return;
 
-      addOnlineDriver(user.id, socket.id);
-      socket.join("drivers:online");
-
       try {
         const driver = await prisma.driverProfile.findUnique({
           where: { userId: user.id },
         });
 
-        if (driver) {
-          await prisma.driverProfile.update({
-            where: { id: driver.id },
-            data: {
-              availability: "ONLINE",
-              lastLocationAt: new Date(),
-            },
-          });
-
-          io?.emit("driver_status_changed", {
-            driverId: user.id,
-            status: "ONLINE",
-          });
-        }
+        if (driver?.availability !== "ONLINE" && driver?.availability !== "BUSY") return;
+        addOnlineDriver(user.id, socket.id);
+        socket.join("drivers:online");
       } catch (error) {
         console.error("driver:online error:", error);
       }
@@ -155,35 +141,13 @@ export function initSocket(server: HttpServer) {
     /**
      * DRIVER GOES OFFLINE
      */
-    socket.on("driver:offline", async () => {
+    socket.on("driver:offline", () => {
       if (user.role !== "DRIVER") return;
 
       removeOnlineDriver(user.id, socket.id);
       socket.leave("drivers:online");
 
-      if (isDriverFullyOnline(user.id)) return;
-
-      try {
-        const driver = await prisma.driverProfile.findUnique({
-          where: { userId: user.id },
-        });
-
-        if (driver) {
-          await prisma.driverProfile.update({
-            where: { id: driver.id },
-            data: {
-              availability: "OFFLINE",
-            },
-          });
-
-          io?.emit("driver_status_changed", {
-            driverId: user.id,
-            status: "OFFLINE",
-          });
-        }
-      } catch (error) {
-        console.error("driver:offline error:", error);
-      }
+      // Availability is written only by the authenticated REST endpoint.
     });
 
     socket.on("join_trip_room", async (tripId: string) => {
@@ -216,31 +180,7 @@ export function initSocket(server: HttpServer) {
       if (user.role === "DRIVER") {
         removeOnlineDriver(user.id, socket.id);
 
-        if (!isDriverFullyOnline(user.id)) {
-          socket.leave("drivers:online");
-
-          try {
-            const driver = await prisma.driverProfile.findUnique({
-              where: { userId: user.id },
-            });
-
-            if (driver) {
-              await prisma.driverProfile.update({
-                where: { id: driver.id },
-                data: {
-                  availability: "OFFLINE",
-                },
-              });
-
-              io?.emit("driver_status_changed", {
-                driverId: user.id,
-                status: "OFFLINE",
-              });
-            }
-          } catch (error) {
-            console.error("disconnect driver offline error:", error);
-          }
-        }
+        if (!isDriverFullyOnline(user.id)) socket.leave("drivers:online");
       }
     });
   });

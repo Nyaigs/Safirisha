@@ -2,6 +2,9 @@ import { prisma } from "../lib/prisma";
 import { calculateDistanceKm } from "../utils/distance";
 import { normalizeVehicleType } from "./trip.service";
 
+/** A foreground driver update is expected at least every 15 seconds. */
+export const DRIVER_LOCATION_MAX_AGE_MS = 2 * 60 * 1000;
+
 type DispatchCandidate = {
   driverProfileId: string;
   userId: string;
@@ -35,6 +38,10 @@ function calculateAcceptanceRate(totalAssigned: number, totalCompleted: number):
 function calculateFreshnessMinutes(lastLocationAt: Date | null): number {
   if (!lastLocationAt) return 999;
   return (Date.now() - lastLocationAt.getTime()) / 60000;
+}
+
+export function hasFreshDriverLocation(lastLocationAt: Date | null): boolean {
+  return !!lastLocationAt && Date.now() - lastLocationAt.getTime() <= DRIVER_LOCATION_MAX_AGE_MS;
 }
 
 function calculateRankingScore(candidate: {
@@ -71,6 +78,7 @@ export async function findNearbyDrivers({
       vehicleType: { in: vehicleAliases },
       currentLat: { not: null },
       currentLng: { not: null },
+      lastLocationAt: { gte: new Date(Date.now() - DRIVER_LOCATION_MAX_AGE_MS) },
     },
     include: {
       user: {
@@ -105,12 +113,10 @@ export async function findNearbyDrivers({
     const distance = calculateDistanceKm(lat, lng, Number(d.currentLat), Number(d.currentLng));
     if (distance > radiusKm) continue;
 
-     const completedJobs = await prisma.transportRequest.count({
-       where: { assignedDriverId: d.id, status: "COMPLETED" },
-     });
-     const totalAssigned = await prisma.transportRequest.count({
-       where: { assignedDriverId: { not: null } },
-     });
+     const [completedJobs, totalAssigned] = await Promise.all([
+       prisma.transportRequest.count({ where: { assignedDriverId: d.id, status: "COMPLETED" } }),
+       prisma.transportRequest.count({ where: { assignedDriverId: d.id } }),
+     ]);
 
     const acceptanceRate = calculateAcceptanceRate(totalAssigned, completedJobs);
     const freshnessMinutes = calculateFreshnessMinutes(d.lastLocationAt);

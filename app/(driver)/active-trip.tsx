@@ -213,6 +213,8 @@ export default function ActiveTripScreen() {
   const driverLocation = useTripStore((s) => s.driverLocation);
   const isLoading = useTripStore((s) => s.isLoading);
   const isSubmitting = useTripStore((s) => s.isSubmitting);
+  const tripError = useTripStore((s) => s.error);
+  const fetchTrip = useTripStore((s) => s.fetchTrip);
   const updateTripStatusAction = useTripStore((s) => s.updateTripStatus);
   const confirmCashAction = useTripStore((s) => s.confirmCash);
 
@@ -374,6 +376,12 @@ export default function ActiveTripScreen() {
     let mounted = true;
     let locationSub: Location.LocationSubscription | null = null;
 
+    const reconcileAfterReconnect = () => {
+      // Recover from the database rather than trusting missed socket events.
+      void initTrip();
+      store.getState().subscribeToTripRoom(tripId);
+    };
+
     const onTripUpdated = (payload: TripUpdatedPayload) => {
       if (!mounted || !payload?.trip || payload.trip.id !== tripId) return;
 
@@ -472,6 +480,7 @@ export default function ActiveTripScreen() {
         }
 
         store.getState().subscribeToTripRoom(tripId);
+        socket.on("connect", reconcileAfterReconnect);
         socket.on("trip_updated", onTripUpdated);
         socket.on("trip_status_updated", onTripStatusUpdated);
         socket.on("trip_expired", onTripExpired);
@@ -532,6 +541,7 @@ export default function ActiveTripScreen() {
       mounted = false;
       locationSub?.remove();
       store.getState().unsubscribeFromTripRoom(tripId);
+      socket.off("connect", reconcileAfterReconnect);
       socket.off("trip_updated", onTripUpdated);
       socket.off("trip_status_updated", onTripStatusUpdated);
       socket.off("trip_expired", onTripExpired);
@@ -585,6 +595,32 @@ export default function ActiveTripScreen() {
       await Linking.openURL(url);
     } catch {
       Alert.alert("Call failed", "Unable to open the phone dialer.");
+    }
+  };
+
+  const openNavigation = async () => {
+    const headingToPickup =
+      currentStatus === "ACCEPTED" ||
+      currentStatus === "DRIVER_EN_ROUTE" ||
+      currentStatus === "ARRIVED_PICKUP";
+    const latitude = headingToPickup ? pickupLat : dropoffLat;
+    const longitude = headingToPickup ? pickupLng : dropoffLng;
+
+    if (!isValidCoordinate(latitude) || !isValidCoordinate(longitude)) {
+      Alert.alert("Navigation unavailable", "This trip does not have a valid destination yet.");
+      return;
+    }
+
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`;
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (!supported) {
+        Alert.alert("Navigation unavailable", "No maps app is available on this device.");
+        return;
+      }
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert("Navigation unavailable", "Unable to open directions right now.");
     }
   };
 
@@ -663,7 +699,15 @@ export default function ActiveTripScreen() {
   if (!trip) {
     return (
       <SafeAreaView style={styles.center}>
-        <Text style={styles.centerText}>Trip not found.</Text>
+        <Text style={styles.centerText}>
+          {tripError || "Trip not found."}
+        </Text>
+        <TouchableOpacity
+          style={styles.primaryButton}
+          onPress={() => void fetchTrip(tripId)}
+        >
+          <Text style={styles.primaryButtonText}>Try again</Text>
+        </TouchableOpacity>
       </SafeAreaView>
     );
   }
@@ -769,12 +813,14 @@ export default function ActiveTripScreen() {
             <Ionicons name="arrow-back" size={20} color="#111827" />
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.mapActionButton}
-            onPress={() => fitMapToPoints()}
-          >
-            <Ionicons name="locate-outline" size={20} color="#111827" />
-          </TouchableOpacity>
+          <View style={styles.mapActionsRight}>
+            <TouchableOpacity style={styles.mapActionButton} onPress={openNavigation}>
+              <Ionicons name="navigate-outline" size={20} color="#111827" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.mapActionButton} onPress={() => fitMapToPoints()}>
+              <Ionicons name="locate-outline" size={20} color="#111827" />
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
@@ -1030,6 +1076,10 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
     elevation: 4,
+  },
+  mapActionsRight: {
+    flexDirection: "row",
+    gap: 10,
   },
   bottomSheet: {
     flex: 1,

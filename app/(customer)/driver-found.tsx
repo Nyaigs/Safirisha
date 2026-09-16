@@ -1,6 +1,7 @@
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import {
+  Alert,
   Linking,
   ScrollView,
   StyleSheet,
@@ -84,21 +85,27 @@ export default function DriverFoundScreen() {
   const vehicleIcon = getVehicleIcon(displayVehicle);
 
   const openDialer = async () => {
-    if (!driverPhone) return;
+    if (!driverPhone) {
+      Alert.alert("No phone number", "The driver's phone number is not available yet.");
+      return;
+    }
 
     const url = `tel:${driverPhone}`;
 
     try {
       const supported = await Linking.canOpenURL(url);
-      if (!supported) return;
+      if (!supported) {
+        Alert.alert("Call unavailable", "Your device cannot place calls right now.");
+        return;
+      }
       await Linking.openURL(url);
     } catch {
-      // silent
+      Alert.alert("Call failed", "Unable to open the phone dialer.");
     }
   };
 
   const openLiveTrip = () => {
-    router.push({
+    router.replace({
       pathname: "/(customer)/live-trip",
       params: {
         tripId: tripId || "",
@@ -184,13 +191,6 @@ export default function DriverFoundScreen() {
                 Plate: {plateNumber || "Not available"}
               </Text>
             </View>
-          </View>
-
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Phone</Text>
-            <Text style={styles.detailValue}>
-              {driverPhone || "Not available"}
-            </Text>
           </View>
 
           <View style={styles.detailRow}>

@@ -1,5 +1,6 @@
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { design } from "../constants/design";
 
 type VehicleCardProps = {
   name: string;
@@ -36,7 +37,7 @@ export default function VehicleCard({
           <MaterialCommunityIcons
             name={icon}
             size={28}
-            color={disabled ? "#9ca3af" : isSelected ? "#111827" : "#374151"}
+            color={disabled ? "#9ca3af" : isSelected ? design.colors.brand : design.colors.ink}
           />
         </View>
 
@@ -61,7 +62,7 @@ export default function VehicleCard({
           </Text>
 
           {typeof price === "number" && !disabled && (
-            <Text style={styles.priceText}>KES {price}</Text>
+            <Text style={styles.priceText}>From KES {price}</Text>
           )}
 
           {disabled && (
@@ -73,7 +74,7 @@ export default function VehicleCard({
 
         {isSelected && !disabled && (
           <View style={styles.checkWrap}>
-            <Ionicons name="checkmark-circle" size={24} color="#111827" />
+            <Ionicons name="checkmark-circle" size={24} color={design.colors.brand} />
           </View>
         )}
       </View>
@@ -84,15 +85,15 @@ export default function VehicleCard({
 const styles = StyleSheet.create({
   card: {
     marginBottom: 12,
-    borderRadius: 16,
+    borderRadius: design.radius.lg,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
-    padding: 16,
-    backgroundColor: "#fff",
+    borderColor: design.colors.border,
+    padding: design.spacing.md,
+    backgroundColor: design.colors.surface,
   },
   selectedCard: {
-    borderColor: "#111827",
-    backgroundColor: "#f3f4f6",
+    borderColor: design.colors.brand,
+    backgroundColor: design.colors.brandSoft,
   },
   disabledCard: {
     opacity: 0.55,
@@ -104,8 +105,8 @@ const styles = StyleSheet.create({
   iconWrap: {
     width: 52,
     height: 52,
-    borderRadius: 14,
-    backgroundColor: "#f9fafb",
+    borderRadius: design.radius.md,
+    backgroundColor: design.colors.subtle,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 14,
@@ -119,11 +120,11 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 17,
     fontWeight: "700",
-    color: "#111827",
+    color: design.colors.ink,
   },
   capacity: {
     fontSize: 13,
-    color: "#6b7280",
+    color: design.colors.muted,
     marginTop: 4,
     lineHeight: 18,
   },
@@ -131,22 +132,22 @@ const styles = StyleSheet.create({
     marginTop: 6,
     fontSize: 14,
     fontWeight: "700",
-    color: "#047857",
+    color: design.colors.success,
   },
   disabledHint: {
     marginTop: 6,
     fontSize: 12,
-    color: "#b45309",
+    color: design.colors.warning,
     fontWeight: "600",
   },
   selectedText: {
-    color: "#000",
+    color: design.colors.brand,
   },
   selectedSubText: {
-    color: "#374151",
+    color: design.colors.muted,
   },
   disabledText: {
-    color: "#6b7280",
+    color: design.colors.muted,
   },
   checkWrap: {
     marginLeft: 12,

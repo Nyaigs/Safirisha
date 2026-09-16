@@ -34,6 +34,7 @@ export default function ProfileScreen() {
   const [stats, setStats] = useState<TripStats>(emptyStats);
   const [loadingStats, setLoadingStats] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [statsError, setStatsError] = useState<string | null>(null);
 
   const initials = useMemo(() => {
     if (!user?.fullName) return "U";
@@ -46,6 +47,7 @@ export default function ProfileScreen() {
 
   const fetchProfileAndStats = useCallback(async () => {
     try {
+      setStatsError(null);
       const [meData, statsData] = await Promise.all([
         apiFetch("/auth/me", { method: "GET" }),
         apiFetch("/trips/my-stats", { method: "GET" }),
@@ -62,7 +64,7 @@ export default function ProfileScreen() {
       });
     } catch (error) {
       console.error("Failed to fetch profile/stats:", error);
-      setStats(emptyStats);
+      setStatsError("Trip summary is temporarily unavailable. Pull down to try again.");
     }
   }, [setUser]);
 
@@ -155,7 +157,7 @@ export default function ProfileScreen() {
           </View>
         </TouchableOpacity>
 
-        <View style={styles.statsCard}>
+        {!statsError && <View style={styles.statsCard}>
           <View style={styles.statItem}>
             <Text style={styles.statValue}>{stats.totalTrips}</Text>
             <Text style={styles.statLabel}>Total Trips</Text>
@@ -174,12 +176,18 @@ export default function ProfileScreen() {
             <Text style={styles.statValue}>{stats.cancelledTrips}</Text>
             <Text style={styles.statLabel}>Cancelled</Text>
           </View>
-        </View>
+        </View>}
 
         {loadingStats && (
           <View style={styles.loadingRow}>
             <ActivityIndicator size="small" color="#111827" />
             <Text style={styles.loadingText}>Loading trip summary...</Text>
+          </View>
+        )}
+        {statsError && !loadingStats && (
+          <View style={styles.statsErrorRow}>
+            <Ionicons name="cloud-offline-outline" size={17} color="#A86108" />
+            <Text style={styles.statsErrorText}>{statsError}</Text>
           </View>
         )}
 
@@ -386,6 +394,8 @@ const styles = StyleSheet.create({
     color: "#4b5563",
     fontSize: 14,
   },
+  statsErrorRow: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#FFF3D8", borderRadius: 12, padding: 12, marginBottom: 16 },
+  statsErrorText: { flex: 1, color: "#8A5208", fontSize: 13, fontWeight: "700", lineHeight: 18 },
   menuCard: {
     backgroundColor: "#fff",
     borderRadius: 16,

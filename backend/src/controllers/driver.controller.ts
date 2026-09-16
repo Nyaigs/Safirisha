@@ -3,7 +3,9 @@ import { Response } from "express";
 import { prisma } from "../lib/prisma";
 import { AuthRequest } from "../middleware/auth.middleware";
 import { AppError } from "../middleware/error.middleware";
-import { buildTripInclude } from "../services/trip.service";
+import { buildTripInclude, normalizeVehicleType } from "../services/trip.service";
+import { DRIVER_LOCATION_MAX_AGE_MS, hasFreshDriverLocation } from "../services/dispatch.service";
+import { calculateDistanceKm } from "../utils/distance";
 
 const ACTIVE_TRIP_STATUSES: RequestStatus[] = [
   "ACCEPTED", "DRIVER_ASSIGNED", "DRIVER_EN_ROUTE", "ARRIVED_PICKUP", "PICKUP_CONFIRMED", "IN_TRANSIT", "ARRIVED_DROPOFF", "DELIVERY_CONFIRMED", "PAYMENT_PENDING",
@@ -25,6 +27,20 @@ function safeEmitToUser(req: AuthRequest, userId: string, event: string, payload
   } catch {
     /* socket not initialized */
   }
+}
+
+function safeEmitToTrip(req: AuthRequest, tripId: string, event: string, payload: any) {
+  try {
+    const io = req.app.get("io");
+    if (io) io.to(`trip:${tripId}`).emit(event, payload);
+  } catch {
+    /* socket not initialized */
+  }
+}
+
+function hasValidCoordinates(lat: unknown, lng: unknown): lat is number {
+  return typeof lat === "number" && Number.isFinite(lat) && lat >= -90 && lat <= 90 &&
+    typeof lng === "number" && Number.isFinite(lng) && lng >= -180 && lng <= 180;
 }
 
 export async function getMyDriverProfile(req: AuthRequest, res: Response) {
@@ -85,22 +101,40 @@ export async function getNearbyTripRequests(req: AuthRequest, res: Response) {
 
     const driver = await prisma.driverProfile.findUnique({
       where: { userId },
-      select: { id: true, currentLat: true, currentLng: true, vehicleType: true },
+      select: { id: true, currentLat: true, currentLng: true, vehicleType: true, approvalStatus: true, availability: true, lastLocationAt: true },
     });
 
     if (!driver) return res.status(404).json({ message: "Driver profile not found" });
 
+    if (driver.approvalStatus !== "APPROVED") return res.status(403).json({ message: "Your driver account is not approved yet" });
+    if (driver.availability !== "ONLINE") return res.status(400).json({ message: "Go online first to view nearby jobs" });
+    if (!driver.vehicleType) return res.status(400).json({ message: "Complete your vehicle details before viewing jobs" });
+    if (!hasValidCoordinates(driver.currentLat, driver.currentLng) || !hasFreshDriverLocation(driver.lastLocationAt)) {
+      return res.status(400).json({ message: "Your location is unavailable or stale. Refresh location and try again." });
+    }
+
+    const hasActiveTrip = await prisma.transportRequest.findFirst({ where: { assignedDriverId: driver.id, status: { in: ACTIVE_TRIP_STATUSES } }, select: { id: true } });
+    if (hasActiveTrip) return res.status(409).json({ message: "You already have an active trip" });
+
      const trips = await prisma.transportRequest.findMany({
        where: {
-         status: "SEARCHING_DRIVER",
-         vehicleType: driver.vehicleType || undefined,
+         status: { in: ["SEARCHING", "SEARCHING_DRIVER"] },
        },
        include: { customer: { select: { id: true, fullName: true, phone: true } } },
        orderBy: { createdAt: "desc" },
        take: 20,
      });
 
-    return res.json({ trips });
+    const driverLat = driver.currentLat;
+    const driverLng = driver.currentLng;
+    if (driverLat == null || driverLng == null) return res.status(400).json({ message: "Your location is unavailable. Refresh location and try again." });
+
+    const nearbyTrips = trips
+      .filter((trip) => normalizeVehicleType(trip.vehicleType) === normalizeVehicleType(driver.vehicleType))
+      .map((trip) => ({ ...trip, distanceToPickupKm: calculateDistanceKm(driverLat, driverLng, trip.pickupLat, trip.pickupLng) }))
+      .filter((trip) => trip.distanceToPickupKm <= 10);
+
+    return res.json({ trips: nearbyTrips });
   } catch (error) {
     console.error("[getNearbyTripRequests]", error);
     return res.status(500).json({ message: "Server error" });
@@ -123,6 +157,10 @@ export async function updateDriverAvailability(req: AuthRequest, res: Response) 
     if (!driver) return res.status(404).json({ message: "Driver not found" });
 
     if (availability === "ONLINE") {
+      if (driver.approvalStatus !== "APPROVED") return res.status(403).json({ message: "Your driver account is not approved yet" });
+      if (!hasValidCoordinates(driver.currentLat, driver.currentLng) || !hasFreshDriverLocation(driver.lastLocationAt)) {
+        return res.status(400).json({ message: `A fresh location is required before going online. Update your location within ${DRIVER_LOCATION_MAX_AGE_MS / 60000} minutes and try again.` });
+      }
       const activeTrip = await prisma.transportRequest.findFirst({
         where: { assignedDriverId: driver.id, status: { in: ACTIVE_TRIP_STATUSES } },
       });
@@ -153,12 +191,15 @@ export async function updateDriverLocation(req: AuthRequest, res: Response) {
 
     const driver = await prisma.driverProfile.findUnique({ where: { userId } });
     if (!driver) return res.status(404).json({ message: "Driver not found" });
+    if (!hasValidCoordinates(lat, lng)) return res.status(400).json({ message: "A valid latitude and longitude are required" });
+    if (heading != null && (typeof heading !== "number" || !Number.isFinite(heading))) return res.status(400).json({ message: "Heading must be a valid number" });
+    if (speed != null && (typeof speed !== "number" || !Number.isFinite(speed) || speed < 0)) return res.status(400).json({ message: "Speed must be a valid non-negative number" });
 
     const updated = await prisma.driverProfile.update({
       where: { id: driver.id },
       data: {
-        currentLat: lat ?? driver.currentLat,
-        currentLng: lng ?? driver.currentLng,
+        currentLat: lat,
+        currentLng: lng,
         currentHeading: heading ?? driver.currentHeading,
         currentSpeed: speed ?? driver.currentSpeed,
         lastLocationAt: new Date(),
@@ -177,10 +218,10 @@ export async function updateDriverLocation(req: AuthRequest, res: Response) {
       id: driver.userId,
       driverId: driver.id,
       tripId: activeTrip?.id ?? null,
-      currentLat: lat ?? driver.currentLat,
-      currentLng: lng ?? driver.currentLng,
-      lat: lat ?? driver.currentLat,
-      lng: lng ?? driver.currentLng,
+      currentLat: lat,
+      currentLng: lng,
+      lat,
+      lng,
       heading: heading ?? driver.currentHeading,
       speed: speed ?? driver.currentSpeed,
       updatedAt: new Date().toISOString(),
@@ -189,7 +230,7 @@ export async function updateDriverLocation(req: AuthRequest, res: Response) {
     safeEmitToUser(req, driver.userId, "driver_location_updated", locationPayload);
 
     if (activeTrip) {
-      safeEmitToUser(req, `trip:${activeTrip.id}`, "driver_location_updated", locationPayload);
+      safeEmitToTrip(req, activeTrip.id, "driver_location_updated", locationPayload);
     }
 
     return res.json(updated);
@@ -206,6 +247,11 @@ export async function goOnline(req: AuthRequest, res: Response) {
 
     const driver = await prisma.driverProfile.findUnique({ where: { userId } });
     if (!driver) return res.status(404).json({ message: "Driver not found" });
+
+    if (driver.approvalStatus !== "APPROVED") return res.status(403).json({ message: "Your driver account is not approved yet" });
+    if (!hasValidCoordinates(driver.currentLat, driver.currentLng) || !hasFreshDriverLocation(driver.lastLocationAt)) {
+      return res.status(400).json({ message: "A fresh location is required before going online" });
+    }
 
     const activeTrip = await prisma.transportRequest.findFirst({
       where: { assignedDriverId: driver.id, status: { in: ACTIVE_TRIP_STATUSES } },

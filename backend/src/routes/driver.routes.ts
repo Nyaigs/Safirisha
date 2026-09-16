@@ -1,6 +1,5 @@
 import { Router } from "express";
 import {
-  acceptTrip,
   getMyActiveTrip,
   getMyDriverProfile,
   getNearbyTripRequests,
@@ -10,6 +9,7 @@ import {
   updateDriverKyc,
   updateDriverLocation,
 } from "../controllers/driver.controller";
+import { acceptTripRequest } from "../controllers/trip.controller";
 import { authenticate } from "../middleware/auth.middleware";
 import { authorizeRoles } from "../middleware/role.middleware";
 
@@ -31,6 +31,6 @@ router.patch("/me/kyc", updateDriverKyc);
 router.post("/go-online", goOnline);
 router.post("/go-offline", goOffline);
 
-router.post("/trips/:tripId/accept", acceptTrip);
+router.post("/trips/:tripId/accept", acceptTripRequest);
 
 export default router;

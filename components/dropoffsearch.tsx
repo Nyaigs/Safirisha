@@ -3,11 +3,12 @@ import {
   ActivityIndicator,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { design } from "../constants/design";
 import { AppLocation, DropoffPlace } from "../types";
+import { AppInput } from "./ui/app-input";
 
 const GEOAPIFY_KEY = process.env.EXPO_PUBLIC_GEOAPIFY_KEY;
 
@@ -24,9 +25,10 @@ type GeoapifyFeature = {
 type Props = {
   onSelect: (place: DropoffPlace) => void;
   currentLocation?: AppLocation | null;
+  label?: string;
 };
 
-export default function DropoffSearch({ onSelect, currentLocation }: Props) {
+export default function DropoffSearch({ onSelect, currentLocation, label = "Search location" }: Props) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<DropoffPlace[]>([]);
   const [loading, setLoading] = useState(false);
@@ -108,11 +110,11 @@ export default function DropoffSearch({ onSelect, currentLocation }: Props) {
 
   return (
     <View style={styles.wrapper}>
-      <Text style={styles.label}>Drop-off Location</Text>
+      <Text style={styles.label}>{label}</Text>
 
-      <TextInput
+      <AppInput
         style={styles.input}
-        placeholder="Search destination..."
+        placeholder="Search a landmark, estate or address"
         value={query}
         onChangeText={setQuery}
         autoCapitalize="words"
@@ -159,18 +161,11 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 13,
-    color: "#6b7280",
+    color: design.colors.muted,
     marginBottom: 6,
     fontWeight: "600",
   },
   input: {
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    backgroundColor: "#fff",
-    color: "#111827",
   },
   loader: {
     marginTop: 10,
@@ -178,20 +173,20 @@ const styles = StyleSheet.create({
   helperText: {
     marginTop: 8,
     fontSize: 12,
-    color: "#6b7280",
+    color: design.colors.muted,
   },
   resultsBox: {
     marginTop: 8,
-    backgroundColor: "#fff",
-    borderRadius: 14,
+    backgroundColor: design.colors.surface,
+    borderRadius: design.radius.md,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: design.colors.border,
     overflow: "hidden",
   },
   resultItem: {
     padding: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
+    borderBottomColor: design.colors.subtle,
   },
   lastResultItem: {
     borderBottomWidth: 0,
@@ -199,12 +194,12 @@ const styles = StyleSheet.create({
   resultTitle: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#111827",
+    color: design.colors.ink,
     marginBottom: 4,
   },
   resultAddress: {
     fontSize: 13,
-    color: "#6b7280",
+    color: design.colors.muted,
     lineHeight: 18,
   },
 });

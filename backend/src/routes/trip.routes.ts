@@ -14,6 +14,7 @@ import {
   getMyTripStats,
   getMyTrips,
   getTripById,
+  rateCompletedTrip,
   updateTripStatus,
 } from "../controllers/trip.controller";
 import { authenticate } from "../middleware/auth.middleware";
@@ -45,6 +46,8 @@ router.get(
   authorizeRoles("CUSTOMER"),
   getMyScheduledTrips,
 ); // <-- NEW
+
+router.post("/:id/rating", authenticate, authorizeRoles("CUSTOMER"), rateCompletedTrip);
 
 router.get(
   "/my-active-driver",

@@ -4,6 +4,10 @@ import cron from "node-cron";
 import app from "./app";
 import { bootstrapSuperAdmin } from "./bootstrap";
 import { processScheduledDeletions } from "./services/deletionworker";
+import {
+  expireStaleSearchingTrips,
+  processScheduledTrips,
+} from "./services/scheduledTripWorker";
 import { initSocket } from "./socket/index";
 
 const PORT = Number(process.env.PORT) || 5000;
@@ -19,6 +23,10 @@ async function startServer() {
   cron.schedule("*/5 * * * *", async () => {
     console.log("Running scheduled deletion worker...");
     await processScheduledDeletions();
+  });
+
+  cron.schedule("* * * * *", async () => {
+    await Promise.all([processScheduledTrips(io), expireStaleSearchingTrips(io)]);
   });
 
   server.listen(PORT, "0.0.0.0", async () => {

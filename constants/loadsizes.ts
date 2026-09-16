@@ -33,6 +33,20 @@ export const LOAD_SIZE_OPTIONS: LoadSizeOption[] = [
       "Suitable for furniture, larger deliveries, business stock, and relocation items.",
     recommendedVehicles: ["Pickup", "Lorry"],
   },
+  {
+    key: "Extra Large",
+    label: "Extra Large Load",
+    weightRange: "1500+ kg",
+    description: "For bulk goods, large relocations, and commercial deliveries.",
+    recommendedVehicles: ["Lorry"],
+  },
+  {
+    key: "Custom",
+    label: "Custom load",
+    weightRange: "Tell us what you are moving",
+    description: "Describe unusual, mixed, or oversized items so the driver can prepare.",
+    recommendedVehicles: ["Pickup", "Lorry"],
+  },
 ];
 
 export function getLoadSizeByKey(key?: string | null) {

@@ -1,9 +1,15 @@
-export type LoadSize = "Small" | "Medium" | "Large";
+export type LoadSize = "Small" | "Medium" | "Large" | "Extra Large" | "Custom";
 
 export type AppLocation = {
   latitude: number;
   longitude: number;
   address?: string;
+  placeId?: string;
+};
+
+export type LocationPoint = Required<Pick<AppLocation, "latitude" | "longitude">> & {
+  address: string;
+  placeId?: string;
 };
 
 export type DropoffPlace = {

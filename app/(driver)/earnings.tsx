@@ -6,6 +6,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from "react-native";
 import { useEarningsStore } from "../../store/earnings";
@@ -15,6 +16,7 @@ export default function DriverEarningsScreen() {
   const trips = useEarningsStore((s) => s.trips);
   const isLoading = useEarningsStore((s) => s.isLoading);
   const isRefreshing = useEarningsStore((s) => s.isRefreshing);
+  const error = useEarningsStore((s) => s.error);
   const fetchEarnings = useEarningsStore((s) => s.fetchEarnings);
 
   useEffect(() => {
@@ -26,6 +28,21 @@ export default function DriverEarningsScreen() {
       <SafeAreaView style={styles.center}>
         <ActivityIndicator size="large" color="#111827" />
         <Text style={styles.centerText}>Loading earnings...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={styles.center}>
+        <Text style={styles.errorTitle}>Earnings unavailable</Text>
+        <Text style={styles.errorText}>
+          We couldn't load your earnings. Check your connection and try again.
+        </Text>
+        <Text style={styles.errorDetail}>{error}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={() => fetchEarnings("initial")}>
+          <Text style={styles.retryButtonText}>Try again</Text>
+        </TouchableOpacity>
       </SafeAreaView>
     );
   }
@@ -184,4 +201,9 @@ const styles = StyleSheet.create({
     color: "#64748b",
     fontWeight: "700",
   },
+  errorTitle: { color: "#111827", fontWeight: "900", fontSize: 19 },
+  errorText: { color: "#64748b", marginTop: 8, textAlign: "center", lineHeight: 20, paddingHorizontal: 24 },
+  errorDetail: { color: "#94a3b8", marginTop: 8, textAlign: "center", fontSize: 12, paddingHorizontal: 24 },
+  retryButton: { marginTop: 18, backgroundColor: "#111827", borderRadius: 12, paddingHorizontal: 18, paddingVertical: 12 },
+  retryButtonText: { color: "#fff", fontWeight: "800" },
 });

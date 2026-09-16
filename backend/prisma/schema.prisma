@@ -28,6 +28,7 @@ model User {
   clerkId                    String?            @unique
   driverProfile              DriverProfile?
   customerRequests           TransportRequest[] @relation("CustomerRequests")
+  ratingsGiven               TripRating[]       @relation("CustomerRatings")
 
   @@index([role])
   @@index([isActive])
@@ -35,38 +36,39 @@ model User {
 }
 
 model DriverProfile {
-  id                String                  @id @default(cuid())
-  userId            String                  @unique
-  plateNumber       String?                 @unique
-  vehicleType       String?
-  vehicleImageUrl   String?
-  ownershipProofUrl String?
-  driverLicenseNumber   String?              
-  complianceCertificateUrl String?           
-  kycSubmittedAt        DateTime?            
-  approvalStatus    DriverApprovalStatus    @default(PENDING)
-  availability      DriverAvailability      @default(OFFLINE)
-  currentLat        Float?
-  currentLng        Float?
-  currentHeading    Float?
-  currentSpeed      Float?
-  lastLocationAt    DateTime?
-  createdAt         DateTime                @default(now())
-  updatedAt         DateTime                @updatedAt
-  deletionRequests  DriverDeletionRequest[]
-  user              User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  acceptedRequests  TransportRequest[]      @relation("AssignedDriverRequests")
+  id                       String                  @id @default(cuid())
+  userId                   String                  @unique
+  plateNumber              String?                 @unique
+  vehicleType              String?
+  vehicleImageUrl          String?
+  ownershipProofUrl        String?
+  driverLicenseNumber      String?
+  complianceCertificateUrl String?
+  kycSubmittedAt           DateTime?
+  approvalStatus           DriverApprovalStatus    @default(PENDING)
+  availability             DriverAvailability      @default(OFFLINE)
+  currentLat               Float?
+  currentLng               Float?
+  currentHeading           Float?
+  currentSpeed             Float?
+  lastLocationAt           DateTime?
+  createdAt                DateTime                @default(now())
+  updatedAt                DateTime                @updatedAt
+  deletionRequests         DriverDeletionRequest[]
+  user                     User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  acceptedRequests         TransportRequest[]      @relation("AssignedDriverRequests")
+  ratingsReceived          TripRating[]            @relation("DriverRatings")
 
   @@index([approvalStatus])
   @@index([availability])
 }
 
 model TransportRequest {
-  cancellationReason      String?
-  cancelledBy             CancellationBy?
-  cancellationFee         Float?
-  scheduledFor            DateTime?              // <-- NEW
-  id                     String         @id @default(cuid())
+  cancellationReason     String?
+  cancelledBy            CancellationBy?
+  cancellationFee        Float?
+  scheduledFor           DateTime?
+  id                     String          @id @default(cuid())
   customerId             String
   assignedDriverId       String?
   pickupAddress          String
@@ -81,28 +83,29 @@ model TransportRequest {
   specialNotes           String?
   estimatedPrice         Float
   distanceKm             Float
-  status                 RequestStatus  @default(REQUESTING)
-  createdAt              DateTime       @default(now())
-  updatedAt              DateTime       @updatedAt
-  cashConfirmedByDriver  Boolean        @default(false)
+  status                 RequestStatus   @default(REQUESTING)
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+  cashConfirmedByDriver  Boolean         @default(false)
   completedAt            DateTime?
-  driverNetEarning       Float          @default(0)
+  driverNetEarning       Float           @default(0)
   mpesaCheckoutRequestId String?
   mpesaReceiptNumber     String?
   paidAt                 DateTime?
   paymentMethod          PaymentMethod?
-  paymentStatus          PaymentStatus  @default(UNPAID)
-  platformFeeAmount      Float          @default(0)
-  platformFeePercent     Float          @default(10)
+  paymentStatus          PaymentStatus   @default(UNPAID)
+  platformFeeAmount      Float           @default(0)
+  platformFeePercent     Float           @default(10)
   acceptedAt             DateTime?
   cancelledAt            DateTime?
   expiredAt              DateTime?
   expiresAt              DateTime?
   searchStartedAt        DateTime?
-  pickupConfirmed        Boolean        @default(false)
-  deliveryConfirmed      Boolean        @default(false)
-  assignedDriver         DriverProfile? @relation("AssignedDriverRequests", fields: [assignedDriverId], references: [id])
-  customer               User           @relation("CustomerRequests", fields: [customerId], references: [id], onDelete: Cascade)
+  pickupConfirmed        Boolean         @default(false)
+  deliveryConfirmed      Boolean         @default(false)
+  assignedDriver         DriverProfile?  @relation("AssignedDriverRequests", fields: [assignedDriverId], references: [id])
+  customer               User            @relation("CustomerRequests", fields: [customerId], references: [id], onDelete: Cascade)
+  rating                 TripRating?
 }
 
 model DriverDeletionRequest {
@@ -117,6 +120,23 @@ model DriverDeletionRequest {
   driver            DriverProfile         @relation(fields: [driverId], references: [id], onDelete: Cascade)
 
   @@index([driverId, status])
+}
+
+model TripRating {
+  id         String   @id @default(cuid())
+  tripId     String   @unique
+  customerId String
+  driverId   String
+  rating     Int
+  feedback   String?
+  createdAt  DateTime @default(now())
+
+  trip     TransportRequest @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  customer User             @relation("CustomerRatings", fields: [customerId], references: [id], onDelete: Cascade)
+  driver   DriverProfile    @relation("DriverRatings", fields: [driverId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@index([driverId])
 }
 
 enum UserRole {
@@ -138,24 +158,24 @@ enum DriverAvailability {
 }
 
 enum RequestStatus {
-    REQUESTING
-    SEARCHING
-    SEARCHING_DRIVER
-    ACCEPTED
-    DRIVER_ASSIGNED
-    DRIVER_EN_ROUTE
-    DRIVER_ARRIVED
-    ARRIVED_PICKUP
-    PICKUP_CONFIRMED
-    IN_TRANSIT
-    ARRIVED_DROPOFF
-    DELIVERY_CONFIRMED
-    COMPLETED_PENDING_CONFIRMATION
-    COMPLETED
-    DELIVERED
-    PAYMENT_PENDING
-    CANCELLED
-    SCHEDULED   
+  REQUESTING
+  SEARCHING
+  SEARCHING_DRIVER
+  ACCEPTED
+  DRIVER_ASSIGNED
+  DRIVER_EN_ROUTE
+  DRIVER_ARRIVED
+  ARRIVED_PICKUP
+  PICKUP_CONFIRMED
+  IN_TRANSIT
+  ARRIVED_DROPOFF
+  DELIVERY_CONFIRMED
+  COMPLETED_PENDING_CONFIRMATION
+  COMPLETED
+  DELIVERED
+  PAYMENT_PENDING
+  CANCELLED
+  SCHEDULED
 }
 
 enum PaymentMethod {
