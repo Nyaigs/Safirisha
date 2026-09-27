@@ -3,7 +3,7 @@
 Express + Prisma + PostgreSQL backend for the Safirisha logistics platform.
 
 ## Structure
-
+```text
 backend/
 ├── src/
 │ ├── controllers/ # Route handlers
@@ -18,7 +18,7 @@ backend/
 │ └── migrations/
 ├── uploads/ # Runtime file storage (not tracked)
 └── .env.example
-text
+```
 
 
 ## Endpoints
