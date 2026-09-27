@@ -27,38 +27,39 @@ The long-term roadmap covers goods transportation, parcel delivery, business log
 | Caching | Redis (planned) |
 
 ## Project Structure
+```text
 Safirisha/
-├── app/ # Expo Router screens
-│ ├── (auth)/ # Login, register, password reset
-│ ├── (customer)/ # Customer booking flow
-│ ├── (driver)/ # Driver dashboard and jobs
-│ └── (admin)/ # Admin console
-├── assets/ # Images, icons, splash
-├── components/ # Reusable UI + feature components
-│ ├── booking/ # Booking sheet and steps
-│ ├── driver/ # Job ping overlay
-│ └── ui/ # Design system primitives
-├── constants/ # design.ts, layout.ts, vehicles, loadsizes
-├── hooks/ # Custom React hooks
-├── lib/ # API client, socket, maps, config
-├── store/ # Zustand stores
-├── types/ # Shared TypeScript types
-├── utils/ # Helpers
-├── backend/ # Express + Prisma backend
-│ ├── src/
-│ │ ├── controllers/
-│ │ ├── middleware/
-│ │ ├── routes/
-│ │ ├── services/
-│ │ └── socket/
-│ ├── prisma/
-│ │ ├── schema.prisma
-│ │ └── migrations/
-│ └── uploads/ # Runtime uploads (not tracked)
-├── .env.example # Frontend env template
-├── eas.json # EAS build profiles
+├── app/                    # Expo Router screens
+│   ├── (auth)/             # Login, register, password reset
+│   ├── (customer)/         # Customer booking flow
+│   ├── (driver)/           # Driver dashboard and jobs
+│   └── (admin)/            # Admin console
+├── assets/                 # Images, icons, splash
+├── components/             # Reusable UI + feature components
+│   ├── booking/            # Booking sheet and steps
+│   ├── driver/             # Job ping overlay
+│   └── ui/                 # Design system primitives
+├── constants/              # design.ts, layout.ts, vehicles, loadsizes
+├── hooks/                  # Custom React hooks
+├── lib/                    # API client, socket, maps, config
+├── store/                  # Zustand stores
+├── types/                  # Shared TypeScript types
+├── utils/                  # Helpers
+├── backend/                # Express + Prisma backend
+│   ├── src/
+│   │   ├── controllers/
+│   │   ├── middleware/
+│   │   ├── routes/
+│   │   ├── services/
+│   │   └── socket/
+│   ├── prisma/
+│   │   ├── schema.prisma
+│   │   └── migrations/
+│   └── uploads/            # Runtime uploads (not tracked)
+├── .env.example            # Frontend env template
+├── eas.json                # EAS build profiles
 └── package.json
-
+```
 ## Quick Start
 
 ### Prerequisites
