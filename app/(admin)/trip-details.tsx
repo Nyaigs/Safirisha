@@ -330,12 +330,13 @@ export default function AdminTripDetailsScreen() {
   }, [tripId]);
 
   useEffect(() => {
-    if (!tripId) {
-      setLoading(false);
-      return;
-    }
+    if (!tripId) return;
 
-    fetchTrip()
+    apiFetch(`/admin/trips/${tripId}`)
+      .then((data) => {
+        setTrip(data?.trip || null);
+        setTracking(data?.tracking || null);
+      })
       .catch((error: any) => {
         Alert.alert("Load failed", error?.message || "Could not load trip");
       })
@@ -447,7 +448,7 @@ export default function AdminTripDetailsScreen() {
     }
   };
 
-  if (loading) {
+  if (loading && tripId) {
     return (
       <View style={styles.center}>
         <ActivityIndicator color="#0f172a" size="large" />

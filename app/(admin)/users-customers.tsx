@@ -41,7 +41,8 @@ export default function AdminCustomersUsersScreen() {
   }, []);
 
   useEffect(() => {
-    fetchUsers()
+    apiFetch("/admin/users?role=CUSTOMER")
+      .then((data) => setUsers(data.users || []))
       .catch((error: any) => {
         Alert.alert(
           "Load failed",

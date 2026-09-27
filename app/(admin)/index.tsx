@@ -2,7 +2,6 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -12,35 +11,40 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { CardSkeleton } from "../../components/ui/skeleton";
 import { StateMessage } from "../../components/ui/state-message";
+import { design } from "../../constants/design";
 import { disconnectSocket } from "../../lib/socket";
-import { useAuthStore } from "../../store/auth";
+import type { RecentOrder } from "../../store/admin";
 import {
   subscribeAdminStats,
   unsubscribeAdminStats,
   useAdminStore,
 } from "../../store/admin";
-import type { RecentOrder } from "../../store/admin";
+import { useAuthStore } from "../../store/auth";
 
 function getStatusColors(status?: string) {
   switch (status) {
-    case "DELIVERED":
-      return { bg: "#dcfce7", text: "#166534" };
-    case "CANCELLED":
-      return { bg: "#fee2e2", text: "#b91c1c" };
-    case "SEARCHING":
-      return { bg: "#fef3c7", text: "#b45309" };
+    case "DELIVERED": return { bg: "#dcfce7", text: "#166534" };
+    case "CANCELLED": return { bg: "#fee2e2", text: "#b91c1c" };
+    case "SEARCHING": return { bg: "#fef3c7", text: "#b45309" };
     case "ACCEPTED":
     case "DRIVER_EN_ROUTE":
     case "ARRIVED_PICKUP":
-    case "IN_TRANSIT":
-      return { bg: "#e0e7ff", text: "#4338ca" };
-    default:
-      return { bg: "#e5e7eb", text: "#111827" };
+    case "IN_TRANSIT": return { bg: "#e0e7ff", text: "#4338ca" };
+    default: return { bg: "#e5e7eb", text: "#111827" };
   }
 }
 
-function StatCard({ label, value, icon }: { label: string; value: string | number; icon: keyof typeof Ionicons.glyphMap }) {
+function StatCard({
+  label,
+  value,
+  icon,
+}: {
+  label: string;
+  value: string | number;
+  icon: keyof typeof Ionicons.glyphMap;
+}) {
   return (
     <View style={styles.statCard}>
       <View style={styles.statIconWrap}>
@@ -52,21 +56,25 @@ function StatCard({ label, value, icon }: { label: string; value: string | numbe
   );
 }
 
-function ShortcutCard({ label, value, icon, onPress }: { label: string; value: string | number; icon: keyof typeof Ionicons.glyphMap; onPress: () => void }) {
+function WorkspaceCard({
+  title,
+  subtitle,
+  icon,
+  accent,
+  onPress,
+}: {
+  title: string;
+  subtitle: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  accent: string;
+  onPress: () => void;
+}) {
   return (
-    <TouchableOpacity style={styles.shortcutCard} onPress={onPress} activeOpacity={0.88}>
-      <View style={styles.shortcutIconWrap}>
-        <Ionicons name={icon} size={18} color="#0f172a" />
-      </View>
-      <Text style={styles.shortcutLabel}>{label}</Text>
-      <Text style={styles.shortcutValue}>{value}</Text>
-    </TouchableOpacity>
-  );
-}
-
-function WorkspaceCard({ title, subtitle, icon, accent, onPress }: { title: string; subtitle: string; icon: keyof typeof Ionicons.glyphMap; accent: string; onPress: () => void }) {
-  return (
-    <TouchableOpacity style={[styles.workspaceCard, { borderColor: `${accent}22` }]} activeOpacity={0.9} onPress={onPress}>
+    <TouchableOpacity
+      style={[styles.workspaceCard, { borderColor: `${accent}22` }]}
+      activeOpacity={0.9}
+      onPress={onPress}
+    >
       <View style={[styles.workspaceIconWrap, { backgroundColor: accent }]}>
         <Ionicons name={icon} size={22} color="#fff" />
       </View>
@@ -104,10 +112,17 @@ function RecentOrderCard({ order }: { order: RecentOrder }) {
           </Text>
         </View>
       </View>
-      <Text style={styles.orderMeta}>Customer: {order.customer?.fullName || "—"}</Text>
-      <Text style={styles.orderMeta}>Driver: {order.assignedDriver?.user?.fullName || "Not assigned"}</Text>
-      <Text style={styles.orderMeta}>Vehicle: {order.vehicleType || "—"} • Load: {order.loadSize || "—"}</Text>
-      <Text style={styles.orderMeta}>Price: KES {Number(order.estimatedPrice ?? 0).toLocaleString()}</Text>
+      <Text style={styles.orderMeta}>
+        Price: KES {Number(order.estimatedPrice ?? 0).toLocaleString()}
+      </Text>
+      <Text style={styles.orderMeta}>
+        {order.createdAt && Number.isFinite(Date.parse(order.createdAt))
+          ? new Date(order.createdAt).toLocaleString("en-KE", {
+              dateStyle: "medium",
+              timeStyle: "short",
+            })
+          : "Time unavailable"}
+      </Text>
       <View style={styles.orderFooter}>
         <Text style={styles.orderFooterText}>Open trip details</Text>
         <Ionicons name="chevron-forward" size={16} color="#64748b" />
@@ -155,10 +170,14 @@ export default function AdminDashboardScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#0f172a" />
-        <Text style={styles.loadingText}>Loading admin console...</Text>
-      </View>
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: insets.top + design.spacing.md },
+        ]}
+      >
+        <CardSkeleton cards={4} />
+      </ScrollView>
     );
   }
 
@@ -186,7 +205,7 @@ export default function AdminDashboardScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           showsVerticalScrollIndicator={false}
         >
-          <View style={[styles.hero, { paddingTop: insets.top + 18 }]}>
+          <View style={[styles.hero, { paddingTop: insets.top + design.spacing.md }]}>
             <View style={styles.heroTop}>
               <View style={styles.heroBrand}>
                 <View style={styles.logoWrap}>
@@ -194,24 +213,45 @@ export default function AdminDashboardScreen() {
                 </View>
                 <View style={styles.heroTextWrap}>
                   <Text style={styles.heroTitle}>Admin Console</Text>
-                  <Text style={styles.heroSubtitle}>Platform operations, monitoring, and user control.</Text>
+                  <Text style={styles.heroSubtitle}>
+                    Platform operations, monitoring, and user control.
+                  </Text>
                 </View>
               </View>
 
               <View style={styles.profileArea}>
-                <TouchableOpacity style={styles.profilePill} activeOpacity={0.85} onPress={() => setMenuOpen((prev) => !prev)}>
+                <TouchableOpacity
+                  style={styles.profilePill}
+                  activeOpacity={0.85}
+                  onPress={() => setMenuOpen((prev) => !prev)}
+                >
                   <Ionicons name="person-circle-outline" size={20} color="#fff" />
-                  <Text style={styles.profileText}>{user?.fullName?.split(" ")[0] || "Admin"}</Text>
-                  <Ionicons name={menuOpen ? "chevron-up-outline" : "chevron-down-outline"} size={16} color="#fff" />
+                  <Text style={styles.profileText}>
+                    {user?.fullName?.split(" ")[0] || "Admin"}
+                  </Text>
+                  <Ionicons
+                    name={menuOpen ? "chevron-up-outline" : "chevron-down-outline"}
+                    size={16}
+                    color="#fff"
+                  />
                 </TouchableOpacity>
 
                 {menuOpen && (
                   <View style={styles.profileMenu}>
-                    <TouchableOpacity style={styles.profileMenuItem} onPress={() => { setMenuOpen(false); router.push("/(admin)/profile"); }}>
+                    <TouchableOpacity
+                      style={styles.profileMenuItem}
+                      onPress={() => {
+                        setMenuOpen(false);
+                        router.push("/(admin)/profile");
+                      }}
+                    >
                       <Ionicons name="settings-outline" size={18} color="#111827" />
                       <Text style={styles.profileMenuText}>Settings</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={[styles.profileMenuItem, styles.profileMenuDanger]} onPress={handleLogout}>
+                    <TouchableOpacity
+                      style={[styles.profileMenuItem, styles.profileMenuDanger]}
+                      onPress={handleLogout}
+                    >
                       <Ionicons name="log-out-outline" size={18} color="#b91c1c" />
                       <Text style={styles.profileMenuDangerText}>Log Out</Text>
                     </TouchableOpacity>
@@ -220,53 +260,76 @@ export default function AdminDashboardScreen() {
               </View>
             </View>
 
-            <View style={styles.heroSummaryCard}>
-              <View style={styles.heroSummaryTop}>
-                <Text style={styles.heroSummaryHeading}>Live overview</Text>
-                <TouchableOpacity style={styles.refreshChip} onPress={onRefresh}>
-                  <Ionicons name="refresh-outline" size={15} color="#fff" />
-                  <Text style={styles.refreshChipText}>Refresh</Text>
-                </TouchableOpacity>
-              </View>
-
-              <Text style={styles.heroSummaryBody}>
-                Jump into the main admin workspaces below and manage the platform faster with fewer taps.
-              </Text>
-
-              <View style={styles.overviewGrid}>
-                <StatCard label="Active Trips" value={stats.activeTrips} icon="navigate-outline" />
-                <StatCard label="Online Drivers" value={stats.onlineDrivers} icon="car-sport-outline" />
-                <StatCard label="Pending approvals" value={stats.pendingDrivers} icon="time-outline" />
-                <StatCard label="Revenue" value={`KES ${Number(stats.deliveredRevenue).toLocaleString()}`} icon="cash-outline" />
-              </View>
+            <View style={styles.overviewGrid}>
+              <StatCard label="Active Trips" value={stats.activeTrips} icon="navigate-outline" />
+              <StatCard label="Online Drivers" value={stats.onlineDrivers} icon="car-sport-outline" />
+              <StatCard label="Pending Approvals" value={stats.pendingDrivers} icon="time-outline" />
+              <StatCard
+                label="Delivered Revenue"
+                value={`KES ${Number(stats.deliveredRevenue).toLocaleString()}`}
+                icon="cash-outline"
+              />
+              <StatCard label="Cancelled Trips" value={stats.cancelledTrips} icon="close-circle-outline" />
+              <StatCard
+                label="Open Alerts"
+                value={stats.pendingDrivers + stats.pendingOrders}
+                icon="alert-circle-outline"
+              />
             </View>
           </View>
 
-          <Text style={styles.sectionTitle}>Workspace</Text>
+          <Text style={styles.sectionTitle}>Admin tools</Text>
           <View style={styles.grid2}>
-            <WorkspaceCard title="Users Center" subtitle="Manage customers, drivers, admins, approvals, and accounts." icon="people-outline" accent="#111827" onPress={() => router.push("/(admin)/users")} />
-            <WorkspaceCard title="Trips & Requests" subtitle="Track jobs, delivery flow, and request lifecycle." icon="trail-sign-outline" accent="#1d4ed8" onPress={() => router.push("/(admin)/trips")} />
-            <WorkspaceCard title="Live Map" subtitle="Monitor driver movement and live platform activity." icon="map-outline" accent="#0f766e" onPress={() => router.push("/(admin)/live-map")} />
-            <WorkspaceCard title="System & Settings" subtitle="Open admin settings, profile, and password controls." icon="settings-outline" accent="#7c3aed" onPress={() => router.push("/(admin)/profile")} />
+            <WorkspaceCard
+              title="Pending Drivers"
+              subtitle="Review driver applications awaiting approval."
+              icon="time-outline"
+              accent="#a16207"
+              onPress={() => router.push("/(admin)/pending-drivers")}
+            />
+            <WorkspaceCard
+              title="All Trips"
+              subtitle="Review delivery requests and trip history."
+              icon="trail-sign-outline"
+              accent="#1d4ed8"
+              onPress={() => router.push("/(admin)/trips")}
+            />
+            <WorkspaceCard
+              title="All Users"
+              subtitle="Manage customers, drivers, and admin accounts."
+              icon="people-outline"
+              accent="#111827"
+              onPress={() => router.push("/(admin)/users")}
+            />
+            <WorkspaceCard
+              title="Live Map"
+              subtitle="Monitor active drivers and delivery activity."
+              icon="map-outline"
+              accent="#0f766e"
+              onPress={() => router.push("/(admin)/live-map")}
+            />
+            <WorkspaceCard
+              title="Settings"
+              subtitle="Manage your profile and security settings."
+              icon="settings-outline"
+              accent="#7c3aed"
+              onPress={() => router.push("/(admin)/profile")}
+            />
           </View>
 
-          <Text style={styles.sectionTitle}>Attention required</Text>
-          <View style={styles.grid2}>
-            <ShortcutCard label="Pending drivers" value={stats.pendingDrivers} icon="time-outline" onPress={() => router.push({ pathname: "/(admin)/users", params: { role: "DRIVER", driverApproval: "PENDING" } })} />
-            <ShortcutCard label="Open requests" value={stats.pendingOrders} icon="cube-outline" onPress={() => router.push("/(admin)/trips")} />
-            <ShortcutCard label="Busy drivers" value={stats.busyDrivers} icon="car-outline" onPress={() => router.push({ pathname: "/(admin)/users", params: { role: "DRIVER" } })} />
-            <ShortcutCard label="Create user" value="New" icon="person-add-outline" onPress={() => router.push("/(admin)/create-user")} />
-          </View>
-
-          <Text style={styles.sectionTitle}>Recent Orders</Text>
+          <Text style={styles.sectionTitle}>Recent Activity</Text>
           <View style={styles.recentWrap}>
             {recentOrders.length === 0 ? (
               <View style={styles.emptyCard}>
                 <Text style={styles.emptyTitle}>No recent orders yet</Text>
-                <Text style={styles.emptyText}>New transport requests will appear here once they are created.</Text>
+                <Text style={styles.emptyText}>
+                  New transport requests will appear here once they are created.
+                </Text>
               </View>
             ) : (
-              recentOrders.map((order) => <RecentOrderCard key={order.id} order={order} />)
+              recentOrders
+                .slice(0, 5)
+                .map((order) => <RecentOrderCard key={order.id} order={order} />)
             )}
           </View>
         </ScrollView>
@@ -279,73 +342,234 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#f3f4f6" },
   flex: { flex: 1 },
   scroll: { flex: 1, backgroundColor: "#f3f4f6" },
-  content: { paddingBottom: 28 },
-  center: { flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 20 },
-  loadingText: { marginTop: 10, color: "#64748b" },
-  retryButton: { marginTop: 16, backgroundColor: "#0f172a", borderRadius: 12, paddingHorizontal: 18, paddingVertical: 12 },
+  content: { paddingBottom: design.spacing.lg },
+  center: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: design.spacing.lg,
+  },
+  retryButton: {
+    marginTop: design.spacing.md,
+    backgroundColor: "#0f172a",
+    borderRadius: design.radius.md,
+    paddingHorizontal: design.spacing.md,
+    paddingVertical: design.spacing.sm,
+  },
   retryButtonText: { color: "#fff", fontWeight: "800" },
 
-  hero: { backgroundColor: "#09090b", paddingHorizontal: 16, paddingBottom: 22 },
-  heroTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 10, zIndex: 10 },
-  heroBrand: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
-  logoWrap: { width: 64, height: 64, borderRadius: 20, backgroundColor: "#18181b", borderWidth: 1, borderColor: "#27272a", justifyContent: "center", alignItems: "center" },
+  hero: {
+    backgroundColor: "#09090b",
+    paddingHorizontal: design.spacing.md,
+    paddingBottom: design.spacing.lg,
+  },
+  heroTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: design.spacing.sm,
+    zIndex: 10,
+  },
+  heroBrand: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: design.spacing.md,
+    flex: 1,
+  },
+  logoWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    backgroundColor: "#18181b",
+    borderWidth: 1,
+    borderColor: "#27272a",
+    justifyContent: "center",
+    alignItems: "center",
+  },
   heroTextWrap: { flex: 1 },
   heroTitle: { color: "#fff", fontSize: 24, fontWeight: "900" },
-  heroSubtitle: { color: "#a1a1aa", marginTop: 4, fontSize: 13, lineHeight: 18 },
+  heroSubtitle: {
+    color: "#a1a1aa",
+    marginTop: design.spacing.xs,
+    fontSize: 13,
+    lineHeight: 18,
+  },
 
   profileArea: { position: "relative" },
-  profilePill: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#18181b", borderWidth: 1, borderColor: "#27272a", paddingHorizontal: 12, paddingVertical: 10, borderRadius: 999 },
+  profilePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: design.spacing.sm,
+    backgroundColor: "#18181b",
+    borderWidth: 1,
+    borderColor: "#27272a",
+    paddingHorizontal: design.spacing.md,
+    paddingVertical: design.spacing.sm,
+    borderRadius: design.radius.pill,
+  },
   profileText: { color: "#fff", fontWeight: "800", maxWidth: 90 },
-  profileMenu: { position: "absolute", top: 52, right: 0, width: 180, backgroundColor: "#fff", borderRadius: 18, borderWidth: 1, borderColor: "#e5e7eb", paddingVertical: 8, shadowColor: "#000", shadowOpacity: 0.08, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 8, zIndex: 50 },
-  profileMenuItem: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 12 },
+  profileMenu: {
+    position: "absolute",
+    top: 52,
+    right: 0,
+    width: 180,
+    backgroundColor: "#fff",
+    borderRadius: design.radius.lg,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    paddingVertical: design.spacing.sm,
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
+    zIndex: 50,
+  },
+  profileMenuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: design.spacing.sm,
+    paddingHorizontal: design.spacing.md,
+    paddingVertical: design.spacing.md,
+  },
   profileMenuText: { color: "#111827", fontWeight: "800", fontSize: 14 },
-  profileMenuDanger: { borderTopWidth: 1, borderTopColor: "#f1f5f9", marginTop: 4 },
+  profileMenuDanger: {
+    borderTopWidth: 1,
+    borderTopColor: "#f1f5f9",
+    marginTop: design.spacing.xs,
+  },
   profileMenuDangerText: { color: "#b91c1c", fontWeight: "900", fontSize: 14 },
 
-  heroSummaryCard: { backgroundColor: "#111827", borderRadius: 28, padding: 18, marginTop: 18, borderWidth: 1, borderColor: "#1f2937" },
-  heroSummaryTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  heroSummaryHeading: { color: "#fff", fontSize: 18, fontWeight: "900" },
-  refreshChip: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#1f2937", paddingHorizontal: 10, paddingVertical: 8, borderRadius: 999 },
-  refreshChipText: { color: "#fff", fontWeight: "800", fontSize: 12 },
-  heroSummaryBody: { color: "#d1d5db", marginTop: 10, lineHeight: 20 },
-
-  overviewGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", marginTop: 16 },
-  statCard: { width: "48%", backgroundColor: "#0f172a", borderRadius: 22, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: "#1e293b" },
-  statIconWrap: { width: 36, height: 36, borderRadius: 12, backgroundColor: "#334155", alignItems: "center", justifyContent: "center", marginBottom: 10 },
+  overviewGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    marginTop: design.spacing.md,
+  },
+  statCard: {
+    width: "48%",
+    backgroundColor: "#0f172a",
+    borderRadius: design.radius.lg,
+    padding: design.spacing.md,
+    marginBottom: design.spacing.md,
+    borderWidth: 1,
+    borderColor: "#1e293b",
+  },
+  statIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: design.radius.md,
+    backgroundColor: "#334155",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: design.spacing.sm,
+  },
   statLabel: { color: "#cbd5e1", fontSize: 12, fontWeight: "800" },
-  statValue: { color: "#fff", fontSize: 20, fontWeight: "900", marginTop: 6 },
+  statValue: { color: "#fff", fontSize: 20, fontWeight: "900", marginTop: design.spacing.xs },
 
-  sectionTitle: { fontSize: 17, fontWeight: "900", color: "#111827", paddingHorizontal: 16, marginTop: 18, marginBottom: 12 },
+  sectionTitle: {
+    fontSize: 17,
+    fontWeight: "900",
+    color: "#111827",
+    paddingHorizontal: design.spacing.md,
+    marginTop: design.spacing.lg,
+    marginBottom: design.spacing.md,
+  },
 
-  grid2: { paddingHorizontal: 16, flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
+  grid2: {
+    paddingHorizontal: design.spacing.md,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+  },
 
-  workspaceCard: { width: "48%", backgroundColor: "#fff", borderRadius: 24, padding: 18, marginBottom: 14, borderWidth: 1, minHeight: 170, justifyContent: "space-between" },
-  workspaceIconWrap: { width: 54, height: 54, borderRadius: 18, justifyContent: "center", alignItems: "center" },
-  workspaceTitle: { marginTop: 12, fontSize: 16, fontWeight: "900", color: "#111827" },
-  workspaceSubtitle: { marginTop: 6, color: "#64748b", fontSize: 12, lineHeight: 18, fontWeight: "700" },
-  workspaceFooter: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 14 },
+  workspaceCard: {
+    width: "48%",
+    backgroundColor: "#fff",
+    borderRadius: design.radius.xl,
+    padding: design.spacing.md,
+    marginBottom: design.spacing.md,
+    borderWidth: 1,
+    minHeight: 170,
+    justifyContent: "space-between",
+  },
+  workspaceIconWrap: {
+    width: 54,
+    height: 54,
+    borderRadius: design.radius.lg,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  workspaceTitle: {
+    marginTop: design.spacing.md,
+    fontSize: 16,
+    fontWeight: "900",
+    color: "#111827",
+  },
+  workspaceSubtitle: {
+    marginTop: design.spacing.xs,
+    color: "#64748b",
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: "700",
+  },
+  workspaceFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: design.spacing.xs,
+    marginTop: design.spacing.md,
+  },
   workspaceOpenText: { fontWeight: "900", fontSize: 13 },
 
-  shortcutCard: { width: "48%", backgroundColor: "#fff", borderRadius: 20, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: "#e5e7eb", minHeight: 120, justifyContent: "space-between" },
-  shortcutIconWrap: { width: 36, height: 36, borderRadius: 12, backgroundColor: "#f1f5f9", justifyContent: "center", alignItems: "center" },
-  shortcutLabel: { marginTop: 10, color: "#475569", fontSize: 12, fontWeight: "800" },
-  shortcutValue: { color: "#111827", fontSize: 20, fontWeight: "900", marginTop: 4 },
-
-  snapshotCard: { width: "48%", backgroundColor: "#fff", borderRadius: 20, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: "#e5e7eb" },
-  snapshotValue: { fontSize: 24, fontWeight: "900", color: "#111827" },
-  snapshotLabel: { marginTop: 6, color: "#64748b", fontSize: 13, fontWeight: "700" },
-
-  recentWrap: { paddingHorizontal: 16, paddingBottom: 20 },
-  orderCard: { backgroundColor: "#fff", borderRadius: 22, padding: 16, borderWidth: 1, borderColor: "#e5e7eb", marginBottom: 12 },
-  orderTop: { flexDirection: "row", justifyContent: "space-between", gap: 10, marginBottom: 10, alignItems: "flex-start" },
+  recentWrap: { paddingHorizontal: design.spacing.md, paddingBottom: design.spacing.lg },
+  orderCard: {
+    backgroundColor: "#fff",
+    borderRadius: design.radius.xl,
+    padding: design.spacing.md,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    marginBottom: design.spacing.md,
+  },
+  orderTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: design.spacing.sm,
+    marginBottom: design.spacing.sm,
+    alignItems: "flex-start",
+  },
   orderRoute: { flex: 1, fontSize: 15, fontWeight: "800", color: "#111827" },
-  statusBadge: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 },
+  statusBadge: {
+    paddingHorizontal: design.spacing.sm,
+    paddingVertical: design.spacing.xs,
+    borderRadius: design.radius.pill,
+  },
   statusBadgeText: { fontSize: 11, fontWeight: "900" },
-  orderMeta: { color: "#475569", marginTop: 4 },
-  orderFooter: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: "#f1f5f9", flexDirection: "row", justifyContent: "flex-end", alignItems: "center", gap: 4 },
+  orderMeta: { color: "#475569", marginTop: design.spacing.xs },
+  orderFooter: {
+    marginTop: design.spacing.md,
+    paddingTop: design.spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: "#f1f5f9",
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    alignItems: "center",
+    gap: design.spacing.xs,
+  },
   orderFooterText: { color: "#64748b", fontWeight: "800", fontSize: 12 },
 
-  emptyCard: { backgroundColor: "#fff", borderRadius: 22, padding: 20, borderWidth: 1, borderColor: "#e5e7eb" },
-  emptyTitle: { color: "#111827", textAlign: "center", fontWeight: "900", fontSize: 16, marginBottom: 6 },
+  emptyCard: {
+    backgroundColor: "#fff",
+    borderRadius: design.radius.xl,
+    padding: design.spacing.lg,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+  },
+  emptyTitle: {
+    color: "#111827",
+    textAlign: "center",
+    fontWeight: "900",
+    fontSize: 16,
+    marginBottom: design.spacing.xs,
+  },
   emptyText: { color: "#64748b", textAlign: "center", lineHeight: 20 },
 });

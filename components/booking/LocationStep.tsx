@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { design } from "../../constants/design";
+import { SkeletonBlock } from "../ui/skeleton";
 import { AppLocation, DropoffPlace } from "../../types";
 import DropoffSearch from "../dropoffsearch";
 
@@ -8,7 +9,7 @@ type Props = { kind: "pickup" | "dropoff"; currentLocation: AppLocation | null; 
 export function LocationStep({ kind, currentLocation, loadingLocation, onCurrent, onSearch, onMapPick }: Props) {
   const label = kind === "pickup" ? "pickup" : "drop-off";
   return <View><Text style={styles.title}>Set {label} location</Text><Text style={styles.subtitle}>Use GPS, search a landmark or estate, or place a pin on the map.</Text>
-    <TouchableOpacity style={styles.action} onPress={onCurrent} disabled={loadingLocation}>{loadingLocation ? <ActivityIndicator color={design.colors.brand} /> : <Ionicons name="locate-outline" size={20} color={design.colors.brand} />}<View><Text style={styles.actionTitle}>Use current location</Text><Text style={styles.actionMeta}>{currentLocation?.address || "Get your GPS location"}</Text></View></TouchableOpacity>
+    <TouchableOpacity style={styles.action} onPress={onCurrent} disabled={loadingLocation}>{loadingLocation ? <SkeletonBlock width={20} height={20} radius={10} /> : <Ionicons name="locate-outline" size={20} color={design.colors.brand} />}<View><Text style={styles.actionTitle}>Use current location</Text><Text style={styles.actionMeta}>{currentLocation?.address || "Get your GPS location"}</Text></View></TouchableOpacity>
     <DropoffSearch onSelect={onSearch} currentLocation={currentLocation} label={`Search ${label}`} />
     <TouchableOpacity style={styles.mapAction} onPress={onMapPick}><Ionicons name="map-outline" size={20} color={design.colors.brand} /><Text style={styles.mapActionText}>Pick a point on the map</Text></TouchableOpacity>
   </View>;

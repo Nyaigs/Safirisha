@@ -75,7 +75,8 @@ export default function DeletionRequestsScreen() {
   }, []);
 
   useEffect(() => {
-    fetchRequests()
+    apiFetch("/admin/deletion-requests")
+      .then((data) => setRequests(data.deletionRequests || []))
       .catch((error: any) => {
         Alert.alert(
           "Load failed",

@@ -4,6 +4,7 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import { apiFetch } from "../lib/api";
 import { connectSocket, getSocket } from "../lib/socket";
 import type { Trip } from "../types/trip";
+import { applyAvailabilityResponse, isDriverOnline } from "../utils/driver-availability";
 
 export type DriverStoreProfile = {
   id: string;
@@ -89,9 +90,7 @@ export const useDriverStore = create<DriverState>()(
             isActive: data.isActive ?? true,
           };
 
-          const isOnline =
-            profile.availability === "ONLINE" ||
-            profile.availability === "BUSY";
+          const isOnline = isDriverOnline(profile.availability);
 
           set({
             driverProfile: profile,
@@ -113,54 +112,62 @@ export const useDriverStore = create<DriverState>()(
       },
 
       goOnline: async () => {
-        const prev = get().isOnline;
-        set({ isOnline: true, isToggling: true, error: null });
+        if (get().isToggling) return;
+        set({ isToggling: true, error: null });
 
         try {
-          const socket = connectSocket();
-          socket.emit("driver:online");
-
-          await apiFetch("/drivers/me/availability", {
+          const response = await apiFetch("/drivers/me/availability", {
             method: "PATCH",
             body: { availability: "ONLINE" },
           });
-
+          // The toggle flips only after the backend confirms it.
+          const decision = applyAvailabilityResponse(get().isOnline, "ONLINE", response);
+          if (decision.errorMessage) throw new Error(decision.errorMessage);
           set((s) => ({
+            isOnline: decision.isOnline,
             isToggling: false,
             driverProfile: s.driverProfile
               ? { ...s.driverProfile, availability: "ONLINE" }
               : null,
           }));
         } catch (err: any) {
-          set({ isOnline: prev, isToggling: false });
+          set({ isToggling: false, error: err?.message ?? "Could not go online" });
           throw err;
+        }
+        try {
+          connectSocket().emit("driver:online");
+        } catch {
+          set({ error: "You are online, but live updates are unavailable. Refresh to reconnect." });
         }
       },
 
       goOffline: async () => {
-        const prev = get().isOnline;
-        set({ isOnline: false, isToggling: true, error: null });
+        if (get().isToggling) return;
+        set({ isToggling: true, error: null });
 
         try {
-          const socket = getSocket();
-          if (socket?.connected) {
-            socket.emit("driver:offline");
-          }
-
-          await apiFetch("/drivers/me/availability", {
+          const response = await apiFetch("/drivers/me/availability", {
             method: "PATCH",
             body: { availability: "OFFLINE" },
           });
-
+          const decision = applyAvailabilityResponse(get().isOnline, "OFFLINE", response);
+          if (decision.errorMessage) throw new Error(decision.errorMessage);
           set((s) => ({
+            isOnline: decision.isOnline,
             isToggling: false,
             driverProfile: s.driverProfile
               ? { ...s.driverProfile, availability: "OFFLINE" }
               : null,
           }));
         } catch (err: any) {
-          set({ isOnline: prev, isToggling: false });
+          set({ isToggling: false, error: err?.message ?? "Could not go offline" });
           throw err;
+        }
+        try {
+          const socket = getSocket();
+          if (socket?.connected) socket.emit("driver:offline");
+        } catch {
+          set({ error: "You are offline, but live updates are unavailable. Refresh to reconnect." });
         }
       },
 
@@ -186,9 +193,11 @@ export const useDriverStore = create<DriverState>()(
     {
       name: "safirisha-driver",
       storage: createJSONStorage(() => AsyncStorage),
-      partialize: (state) => ({
-        isOnline: state.isOnline,
-      }),
+      // Availability is server truth; restoring a persisted online flag would
+      // claim dispatch readiness the backend never confirmed.
+      partialize: () => ({}),
+      // partialize only controls writes; also ignore legacy cached flags on reads.
+      merge: (_persisted, current) => current,
     },
   ),
 );

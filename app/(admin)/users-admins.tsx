@@ -41,7 +41,8 @@ export default function AdminAdminsUsersScreen() {
   }, []);
 
   useEffect(() => {
-    fetchUsers()
+    apiFetch("/admin/users?role=ADMIN")
+      .then((data) => setUsers(data.users || []))
       .catch((error: any) => {
         Alert.alert("Load failed", error?.message || "Could not load admins");
       })

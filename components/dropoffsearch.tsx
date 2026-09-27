@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -8,19 +7,9 @@ import {
 } from "react-native";
 import { design } from "../constants/design";
 import { AppLocation, DropoffPlace } from "../types";
+import { maps } from "../lib/maps";
 import { AppInput } from "./ui/app-input";
-
-const GEOAPIFY_KEY = process.env.EXPO_PUBLIC_GEOAPIFY_KEY;
-
-type GeoapifyFeature = {
-  properties?: {
-    place_id?: string | number;
-    formatted?: string;
-    address_line1?: string;
-    lat?: number | string;
-    lon?: number | string;
-  };
-};
+import { SkeletonBlock } from "./ui/skeleton";
 
 type Props = {
   onSelect: (place: DropoffPlace) => void;
@@ -32,71 +21,55 @@ export default function DropoffSearch({ onSelect, currentLocation, label = "Sear
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<DropoffPlace[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestIdRef = useRef(0);
 
   const searchPlaces = useCallback(
     async (text: string) => {
+      const requestId = ++requestIdRef.current;
       const trimmed = text.trim();
+      setLoading(false);
 
       if (trimmed.length < 3) {
         setResults([]);
-        return;
-      }
-
-      if (!GEOAPIFY_KEY) {
-        setResults([]);
+        setError(null);
         return;
       }
 
       setLoading(true);
+      setError(null);
 
       try {
-        const biasPart =
-          currentLocation?.latitude && currentLocation?.longitude
-            ? `&bias=proximity:${currentLocation.longitude},${currentLocation.latitude}`
-            : "";
-
-        const url =
-          `https://api.geoapify.com/v1/geocode/autocomplete?text=${encodeURIComponent(trimmed)}` +
-          `&filter=countrycode:ke&limit=6${biasPart}&apiKey=${GEOAPIFY_KEY}`;
-
-        const res = await fetch(url);
-        const data = await res.json();
-
-        const places: DropoffPlace[] = (
-          (data?.features || []) as GeoapifyFeature[]
-        )
-          .map((item) => ({
-            id: String(item?.properties?.place_id ?? Math.random().toString()),
-            name:
-              item?.properties?.address_line1 ||
-              item?.properties?.formatted ||
-              "Unknown location",
-            address:
-              item?.properties?.formatted ||
-              item?.properties?.address_line1 ||
-              "Unknown location",
-            latitude: Number(item?.properties?.lat),
-            longitude: Number(item?.properties?.lon),
-          }))
-          .filter(
-            (item) =>
-              !Number.isNaN(item.latitude) && !Number.isNaN(item.longitude),
-          );
-
-        setResults(places);
-      } catch (error) {
-        console.log("Dropoff search failed:", error);
+        const places = await maps.searchPlaces(
+          trimmed,
+          currentLocation
+            ? { lat: currentLocation.latitude, lng: currentLocation.longitude }
+            : undefined,
+        );
+        if (requestId === requestIdRef.current) {
+          setResults(places.map((place) => ({
+            id: place.id,
+            name: place.name,
+            address: place.address,
+            latitude: place.latitude,
+            longitude: place.longitude,
+          })));
+        }
+      } catch (searchError) {
+        if (requestId !== requestIdRef.current) return;
+        setError(searchError instanceof Error ? searchError.message : "Place search is unavailable. Please retry.");
         setResults([]);
       } finally {
-        setLoading(false);
+        if (requestId === requestIdRef.current) setLoading(false);
       }
     },
     [currentLocation],
   );
 
   useEffect(() => {
+    const requestSequence = requestIdRef;
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
     debounceRef.current = setTimeout(() => {
@@ -104,6 +77,7 @@ export default function DropoffSearch({ onSelect, currentLocation, label = "Sear
     }, 400);
 
     return () => {
+      requestSequence.current++;
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [query, searchPlaces]);
@@ -116,11 +90,30 @@ export default function DropoffSearch({ onSelect, currentLocation, label = "Sear
         style={styles.input}
         placeholder="Search a landmark, estate or address"
         value={query}
-        onChangeText={setQuery}
+        onChangeText={(text) => {
+          requestIdRef.current++;
+          setLoading(false);
+          setResults([]);
+          setError(null);
+          setQuery(text);
+        }}
         autoCapitalize="words"
       />
 
-      {loading && <ActivityIndicator style={styles.loader} />}
+      {loading ? (
+        <View style={styles.skeletonList} accessibilityLabel="Loading places">
+          {[0, 1, 2].map((item) => (
+            <View key={item} style={styles.skeletonRow}>
+              <SkeletonBlock width={28} height={28} radius={14} />
+              <View style={styles.skeletonText}>
+                <SkeletonBlock width="60%" height={14} />
+                <SkeletonBlock width="90%" height={12} />
+              </View>
+            </View>
+          ))}
+        </View>
+      ) : null}
+      {!loading && error ? <Text style={styles.errorText}>{error}</Text> : null}
 
       {!loading && query.trim().length > 0 && query.trim().length < 3 && (
         <Text style={styles.helperText}>
@@ -138,6 +131,8 @@ export default function DropoffSearch({ onSelect, currentLocation, label = "Sear
                 index === results.length - 1 && styles.lastResultItem,
               ]}
               onPress={() => {
+                requestIdRef.current++;
+                setLoading(false);
                 setQuery(item.address);
                 setResults([]);
                 onSelect(item);
@@ -167,9 +162,10 @@ const styles = StyleSheet.create({
   },
   input: {
   },
-  loader: {
-    marginTop: 10,
-  },
+  skeletonList: { marginTop: 10, gap: 8 },
+  skeletonRow: { minHeight: 54, flexDirection: "row", alignItems: "center", gap: 10, padding: 10, borderRadius: design.radius.md, backgroundColor: design.colors.surface },
+  skeletonText: { flex: 1, gap: 6 },
+  errorText: { marginTop: 8, color: design.colors.danger, ...design.typography.caption },
   helperText: {
     marginTop: 8,
     fontSize: 12,

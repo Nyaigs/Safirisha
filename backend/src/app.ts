@@ -1,5 +1,7 @@
 import cors from "cors";
 import express from "express";
+import helmet from "helmet";
+import { rateLimit } from "express-rate-limit";
 import path from "path";
 
 import { prisma } from "./lib/prisma";
@@ -13,16 +15,24 @@ import userRoutes from "./routes/user.routes";
 
 const app = express();
 
-// Mobile clients do not send browser origins; web builds may be restricted via
-// CORS_ORIGIN without breaking native Expo clients.
-const allowedOrigins = process.env.CORS_ORIGIN?.split(",")
+// Set CORS_ALLOWED_ORIGINS to comma-separated trusted web origins. Development
+// falls back to the local Expo web origins below; production fails closed if unset.
+// Native clients omit Origin and remain allowed.
+const developmentOrigins = ["http://localhost:8081", "http://localhost:19006"];
+const configuredOrigins = process.env.CORS_ALLOWED_ORIGINS?.split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
+const allowedOrigins = configuredOrigins?.length
+  ? configuredOrigins
+  : process.env.NODE_ENV === "production"
+    ? []
+    : developmentOrigins;
 
+app.use(helmet());
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || !allowedOrigins?.length || allowedOrigins.includes(origin)) {
+      if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
         return;
       }
@@ -30,6 +40,8 @@ app.use(
     },
   }),
 );
+app.use("/api", rateLimit({ windowMs: 15 * 60 * 1000, limit: 300, standardHeaders: true, legacyHeaders: false }));
+app.use("/api/auth", rateLimit({ windowMs: 15 * 60 * 1000, limit: 100, standardHeaders: true, legacyHeaders: false }));
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 

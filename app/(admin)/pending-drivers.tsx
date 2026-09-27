@@ -46,7 +46,8 @@ export default function PendingDriversScreen() {
   useEffect(() => {
     let mounted = true;
 
-    fetchPendingDrivers()
+    apiFetch("/admin/drivers/pending")
+      .then((data) => { if (mounted) setDrivers(Array.isArray(data?.drivers) ? data.drivers : []); })
       .catch((error: any) => {
         Alert.alert(
           "Load failed",

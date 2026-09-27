@@ -62,6 +62,7 @@ export default function AdminLayout() {
         headerStyle: { backgroundColor: "#0b1220" },
         headerTintColor: "#fff",
         headerTitleStyle: { fontWeight: "800" },
+        headerBackButtonDisplayMode: "minimal",
         headerShadowVisible: false,
         contentStyle: { backgroundColor: "#f3f4f6" },
       }}

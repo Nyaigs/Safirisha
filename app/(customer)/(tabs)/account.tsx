@@ -2,7 +2,6 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   RefreshControl,
   ScrollView,
@@ -11,6 +10,9 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ListSkeleton } from "../../../components/ui/skeleton";
+import { design } from "../../../constants/design";
 import { apiFetch } from "../../../lib/api";
 import { useAuthStore } from "../../../store/auth";
 
@@ -20,13 +22,10 @@ type TripStats = {
   cancelledTrips: number;
 };
 
-const emptyStats: TripStats = {
-  totalTrips: 0,
-  completedTrips: 0,
-  cancelledTrips: 0,
-};
+const emptyStats: TripStats = { totalTrips: 0, completedTrips: 0, cancelledTrips: 0 };
 
 export default function ProfileScreen() {
+  const insets = useSafeAreaInsets();
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const setUser = useAuthStore((state) => state.setUser);
@@ -38,12 +37,10 @@ export default function ProfileScreen() {
 
   const initials = useMemo(() => {
     if (!user?.fullName) return "U";
-
     const names = user.fullName.trim().split(" ").filter(Boolean);
     if (names.length === 1) return names[0][0].toUpperCase();
-
     return `${names[0][0]}${names[1][0]}`.toUpperCase();
-  }, [user?.fullName]);
+  }, [user]);
 
   const fetchProfileAndStats = useCallback(async () => {
     try {
@@ -52,11 +49,7 @@ export default function ProfileScreen() {
         apiFetch("/auth/me", { method: "GET" }),
         apiFetch("/trips/my-stats", { method: "GET" }),
       ]);
-
-      if (meData?.user) {
-        setUser(meData.user);
-      }
-
+      if (meData?.user) setUser(meData.user);
       setStats({
         totalTrips: Number(statsData?.totalTrips ?? 0),
         completedTrips: Number(statsData?.completedTrips ?? 0),
@@ -86,11 +79,7 @@ export default function ProfileScreen() {
     }
   }, [fetchProfileAndStats]);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadStats();
-    }, [loadStats]),
-  );
+  useFocusEffect(useCallback(() => { loadStats(); }, [loadStats]));
 
   const handleLogout = () => {
     Alert.alert("Logout", "Are you sure you want to logout?", [
@@ -106,26 +95,19 @@ export default function ProfileScreen() {
     ]);
   };
 
-  const handleEditProfile = () => {
-    router.push("/(customer)/edit-profile");
-  };
+  const handleEditProfile = () => router.push("/(customer)/edit-profile");
 
   return (
     <ScrollView
-      contentContainerStyle={styles.scrollContainer}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-      }
+      contentContainerStyle={[
+        styles.scrollContainer,
+        { paddingBottom: insets.bottom + design.spacing.lg },
+      ]}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+      showsVerticalScrollIndicator={false}
     >
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingTop: insets.top + design.spacing.lg }]}>
         <View style={styles.headerRow}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.replace("/(customer)/(tabs)")}
-          >
-            <Ionicons name="arrow-back" size={22} color="#111827" />
-          </TouchableOpacity>
-
           <View style={styles.headerTextWrap}>
             <Text style={styles.title}>Profile</Text>
             <Text style={styles.subtitle}>Manage your Safirisha account</Text>
@@ -140,54 +122,44 @@ export default function ProfileScreen() {
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>{initials}</Text>
           </View>
-
-          <Text style={styles.userName}>
+          <Text style={styles.userName} numberOfLines={1}>
             {user?.fullName ?? "Unknown User"}
           </Text>
-          <Text style={styles.userPhone}>
+          <Text style={styles.userPhone} numberOfLines={1}>
             {user?.phone ?? "No phone number available"}
           </Text>
-          <Text style={styles.userEmail}>
+          <Text style={styles.userEmail} numberOfLines={1}>
             {user?.email ?? "No email available"}
           </Text>
-
           <View style={styles.editBadge}>
-            <Ionicons name="create-outline" size={14} color="#fff" />
+            <Ionicons name="create-outline" size={14} color={design.colors.white} />
             <Text style={styles.editBadgeText}>Edit Profile</Text>
           </View>
         </TouchableOpacity>
 
-        {!statsError && <View style={styles.statsCard}>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{stats.totalTrips}</Text>
-            <Text style={styles.statLabel}>Total Trips</Text>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{stats.completedTrips}</Text>
-            <Text style={styles.statLabel}>Completed</Text>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{stats.cancelledTrips}</Text>
-            <Text style={styles.statLabel}>Cancelled</Text>
-          </View>
-        </View>}
-
-        {loadingStats && (
-          <View style={styles.loadingRow}>
-            <ActivityIndicator size="small" color="#111827" />
-            <Text style={styles.loadingText}>Loading trip summary...</Text>
-          </View>
-        )}
-        {statsError && !loadingStats && (
+        {loadingStats ? (
+          <ListSkeleton rows={1} />
+        ) : statsError ? (
           <View style={styles.statsErrorRow}>
             <Ionicons name="cloud-offline-outline" size={17} color="#A86108" />
             <Text style={styles.statsErrorText}>{statsError}</Text>
+          </View>
+        ) : (
+          <View style={styles.statsCard}>
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{stats.totalTrips}</Text>
+              <Text style={styles.statLabel}>Total Trips</Text>
+            </View>
+            <View style={styles.divider} />
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{stats.completedTrips}</Text>
+              <Text style={styles.statLabel}>Completed</Text>
+            </View>
+            <View style={styles.divider} />
+            <View style={styles.statItem}>
+              <Text style={styles.statValue}>{stats.cancelledTrips}</Text>
+              <Text style={styles.statLabel}>Cancelled</Text>
+            </View>
           </View>
         )}
 
@@ -197,14 +169,10 @@ export default function ProfileScreen() {
             onPress={() => router.push("/(customer)/(tabs)/activity")}
           >
             <View style={styles.menuLeft}>
-              <MaterialCommunityIcons
-                name="history"
-                size={20}
-                color="#111827"
-              />
+              <MaterialCommunityIcons name="history" size={20} color={design.colors.ink} />
               <Text style={styles.menuText}>My Trips</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color="#6b7280" />
+            <Ionicons name="chevron-forward" size={18} color={design.colors.muted} />
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -212,10 +180,10 @@ export default function ProfileScreen() {
             onPress={() => router.push("/(customer)/settings")}
           >
             <View style={styles.menuLeft}>
-              <Ionicons name="call-outline" size={20} color="#111827" />
+              <Ionicons name="call-outline" size={20} color={design.colors.ink} />
               <Text style={styles.menuText}>Support</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color="#6b7280" />
+            <Ionicons name="chevron-forward" size={18} color={design.colors.muted} />
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -223,34 +191,23 @@ export default function ProfileScreen() {
             onPress={() => router.push("/(customer)/privacy")}
           >
             <View style={styles.menuLeft}>
-              <Ionicons
-                name="shield-checkmark-outline"
-                size={20}
-                color="#111827"
-              />
+              <Ionicons name="shield-checkmark-outline" size={20} color={design.colors.ink} />
               <Text style={styles.menuText}>Privacy & Security</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color="#6b7280" />
+            <Ionicons name="chevron-forward" size={18} color={design.colors.muted} />
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.menuItem}
+            style={[styles.menuItem, styles.menuItemLast]}
             onPress={() => router.push("/(customer)/settings")}
           >
             <View style={styles.menuLeft}>
-              <Ionicons name="settings-outline" size={20} color="#111827" />
+              <Ionicons name="settings-outline" size={20} color={design.colors.ink} />
               <Text style={styles.menuText}>Settings</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color="#6b7280" />
+            <Ionicons name="chevron-forward" size={18} color={design.colors.muted} />
           </TouchableOpacity>
         </View>
-
-        <TouchableOpacity
-          style={styles.homeButton}
-          onPress={() => router.replace("/(customer)/(tabs)")}
-        >
-          <Text style={styles.homeButtonText}>Back to Home</Text>
-        </TouchableOpacity>
 
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Text style={styles.logoutButtonText}>Logout</Text>
@@ -261,189 +218,130 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  scrollContainer: {
-    paddingBottom: 24,
-    backgroundColor: "#fff",
-  },
+  scrollContainer: { backgroundColor: design.colors.surface },
   container: {
     flex: 1,
-    padding: 16,
-    paddingTop: 56,
-    backgroundColor: "#fff",
+    paddingHorizontal: design.spacing.md,
+    backgroundColor: design.colors.surface,
   },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginBottom: 18,
-  },
-  backButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: "#f3f4f6",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-  headerTextWrap: {
-    flex: 1,
-  },
+  headerRow: { flexDirection: "row", alignItems: "flex-start", marginBottom: design.spacing.md },
+  headerTextWrap: { flex: 1 },
   title: {
     fontSize: 28,
-    fontWeight: "700",
-    color: "#111827",
-    marginBottom: 4,
+    fontWeight: "800",
+    color: design.colors.ink,
+    marginBottom: design.spacing.xs,
   },
-  subtitle: {
-    fontSize: 15,
-    color: "#6b7280",
-    lineHeight: 22,
-  },
+  subtitle: { fontSize: 15, color: design.colors.muted, lineHeight: 22 },
   profileCard: {
     alignItems: "center",
-    padding: 20,
-    borderRadius: 16,
-    backgroundColor: "#f9fafb",
+    padding: design.spacing.lg,
+    borderRadius: design.radius.lg,
+    backgroundColor: design.colors.subtle,
     borderWidth: 1,
     borderColor: "#e5e7eb",
-    marginBottom: 16,
+    marginBottom: design.spacing.md,
   },
   avatar: {
     width: 82,
     height: 82,
     borderRadius: 41,
-    backgroundColor: "#111827",
+    backgroundColor: design.colors.ink,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 12,
+    marginBottom: design.spacing.md,
   },
-  avatarText: {
-    fontSize: 28,
-    fontWeight: "700",
-    color: "#fff",
+  avatarText: { fontSize: 28, fontWeight: "800", color: design.colors.white },
+  userName: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: design.colors.ink,
+    marginBottom: design.spacing.xs,
+    textAlign: "center",
   },
+  userPhone: { fontSize: 15, color: design.colors.muted, marginBottom: design.spacing.xs },
+  userEmail: { fontSize: 14, color: design.colors.muted },
   editBadge: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 10,
-    backgroundColor: "#111827",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    gap: 4,
+    marginTop: design.spacing.sm,
+    backgroundColor: design.colors.ink,
+    paddingHorizontal: design.spacing.md,
+    paddingVertical: design.spacing.xs,
+    borderRadius: design.radius.pill,
+    gap: design.spacing.xs,
   },
-  editBadgeText: {
-    color: "#fff",
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  userName: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "#111827",
-    marginBottom: 4,
-    textAlign: "center",
-  },
-  userPhone: {
-    fontSize: 15,
-    color: "#6b7280",
-    marginBottom: 3,
-  },
-  userEmail: {
-    fontSize: 14,
-    color: "#6b7280",
-  },
+  editBadgeText: { color: design.colors.white, fontSize: 13, fontWeight: "700" },
   statsCard: {
     flexDirection: "row",
-    backgroundColor: "#111827",
-    borderRadius: 16,
-    paddingVertical: 18,
-    paddingHorizontal: 10,
+    backgroundColor: design.colors.ink,
+    borderRadius: design.radius.lg,
+    paddingVertical: design.spacing.md,
+    paddingHorizontal: design.spacing.sm,
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 16,
+    marginBottom: design.spacing.md,
   },
-  statItem: {
-    flex: 1,
-    alignItems: "center",
-  },
+  statItem: { flex: 1, alignItems: "center" },
   statValue: {
     fontSize: 22,
     fontWeight: "800",
-    color: "#fff",
-    marginBottom: 6,
+    color: design.colors.white,
+    marginBottom: design.spacing.xs,
   },
   statLabel: {
     fontSize: 12,
-    fontWeight: "600",
+    fontWeight: "700",
     color: "#d1d5db",
     textAlign: "center",
   },
-  divider: {
-    width: 1,
-    height: 40,
-    backgroundColor: "#374151",
-  },
-  loadingRow: {
+  divider: { width: 1, height: 40, backgroundColor: "#374151" },
+  statsErrorRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 16,
+    gap: design.spacing.sm,
+    backgroundColor: "#FFF3D8",
+    borderRadius: design.radius.md,
+    padding: design.spacing.md,
+    marginBottom: design.spacing.md,
   },
-  loadingText: {
-    marginLeft: 8,
-    color: "#4b5563",
-    fontSize: 14,
+  statsErrorText: {
+    flex: 1,
+    color: "#8A5208",
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 18,
   },
-  statsErrorRow: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#FFF3D8", borderRadius: 12, padding: 12, marginBottom: 16 },
-  statsErrorText: { flex: 1, color: "#8A5208", fontSize: 13, fontWeight: "700", lineHeight: 18 },
   menuCard: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
+    backgroundColor: design.colors.surface,
+    borderRadius: design.radius.lg,
     borderWidth: 1,
     borderColor: "#e5e7eb",
-    marginBottom: 16,
+    marginBottom: design.spacing.md,
     overflow: "hidden",
   },
   menuItem: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingHorizontal: design.spacing.md,
+    paddingVertical: design.spacing.md,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     borderBottomWidth: 1,
     borderBottomColor: "#f3f4f6",
   },
-  menuLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
+  menuItemLast: { borderBottomWidth: 0 },
+  menuLeft: { flexDirection: "row", alignItems: "center" },
   menuText: {
-    marginLeft: 12,
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#111827",
-  },
-  homeButton: {
-    backgroundColor: "#111827",
-    paddingVertical: 15,
-    borderRadius: 14,
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  homeButtonText: {
-    color: "#fff",
+    marginLeft: design.spacing.md,
     fontSize: 15,
     fontWeight: "700",
+    color: design.colors.ink,
   },
   logoutButton: {
     backgroundColor: "#fee2e2",
-    paddingVertical: 15,
-    borderRadius: 14,
+    paddingVertical: design.spacing.md,
+    borderRadius: design.radius.md,
     alignItems: "center",
   },
-  logoutButtonText: {
-    color: "#b91c1c",
-    fontSize: 15,
-    fontWeight: "700",
-  },
+  logoutButtonText: { color: "#b91c1c", fontSize: 15, fontWeight: "800" },
 });

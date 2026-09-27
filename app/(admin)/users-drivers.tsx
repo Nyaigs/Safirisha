@@ -110,12 +110,16 @@ export default function AdminDriversUsersScreen() {
   }, [status]);
 
   useEffect(() => {
-    fetchUsers()
+    const query = status
+      ? `/admin/users?role=DRIVER&status=${encodeURIComponent(status)}`
+      : "/admin/users?role=DRIVER";
+    apiFetch(query)
+      .then((data) => setUsers(Array.isArray(data?.users) ? data.users : []))
       .catch((error: any) => {
         Alert.alert("Load failed", error?.message || "Could not load drivers");
       })
       .finally(() => setLoading(false));
-  }, [fetchUsers]);
+  }, [status]);
 
   useEffect(() => {
     const socket = connectSocket();

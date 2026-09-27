@@ -37,7 +37,7 @@ export default function DriverEarningsScreen() {
       <SafeAreaView style={styles.center}>
         <Text style={styles.errorTitle}>Earnings unavailable</Text>
         <Text style={styles.errorText}>
-          We couldn't load your earnings. Check your connection and try again.
+          We couldn&apos;t load your earnings. Check your connection and try again.
         </Text>
         <Text style={styles.errorDetail}>{error}</Text>
         <TouchableOpacity style={styles.retryButton} onPress={() => fetchEarnings("initial")}>

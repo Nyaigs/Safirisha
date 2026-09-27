@@ -186,8 +186,17 @@ export default function AdminTripsScreen() {
   }, []);
 
   useEffect(() => {
-    fetchTrips();
-  }, [fetchTrips]);
+    apiFetch("/admin/trips")
+      .then((res) => setTrips(Array.isArray(res?.trips) ? res.trips : Array.isArray(res) ? res : []))
+      .catch((error) => {
+        console.log("Trips fetch failed:", error);
+        setTrips([]);
+      })
+      .finally(() => {
+        setLoading(false);
+        setRefreshing(false);
+      });
+  }, []);
 
   const searchedTrips = useMemo(() => {
     const q = search.trim().toLowerCase();

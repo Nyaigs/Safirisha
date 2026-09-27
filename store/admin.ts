@@ -25,6 +25,7 @@ export type AdminDashboardStats = {
 
 export type RecentOrder = {
   id: string;
+  createdAt?: string;
   pickupAddress?: string;
   dropoffAddress?: string;
   vehicleType?: string;

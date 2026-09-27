@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
-import { Dimensions, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
+import { clampSheetDrag, nearestSheetSnap, sheetSnapOffsets } from "../../utils/sheet";
 import {
   Gesture,
   GestureDetector,
@@ -11,9 +12,8 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { design } from "../../constants/design";
-
-const { height: SCREEN_HEIGHT } = Dimensions.get("window");
+import { design, snapPoints as responsiveSnapPoints } from "../../constants/design";
+import { useLayout } from "../../constants/layout";
 
 type Props = {
   visible: boolean;
@@ -28,61 +28,51 @@ export function BottomSheet({
   visible,
   onClose: _onClose,
   children,
-  snapPoints = [30, 60, 90],
+  snapPoints,
   initialSnap = 0,
 }: Props) {
+  const { height: SCREEN_HEIGHT, isSmall, isTablet } = useLayout();
   const insets = useSafeAreaInsets();
   const translateY = useSharedValue(0);
   const context = useSharedValue(0);
+  const availableHeight = Math.max(0, SCREEN_HEIGHT - insets.top);
+  const size = isSmall ? "small" : isTablet ? "tablet" : "medium";
+  const snapKey = snapPoints?.join(",") ?? "";
 
-  const sheetHeight = Math.round((SCREEN_HEIGHT - insets.top) * 0.9);
-
-  // The sheet is bottom-anchored. A snap point is the visible portion of the
-  // screen, so its translation is the remaining hidden portion of the sheet.
-  const snapValues = useMemo(() => {
-    const availableHeight = SCREEN_HEIGHT - insets.top;
-    return snapPoints.map((point) => {
-      const visibleHeight = Math.min(Math.max(point, 0), 90) / 100 * availableHeight;
-      return Math.max(0, sheetHeight - visibleHeight);
-    });
-  }, [insets.top, sheetHeight, snapPoints]);
+  const visibleHeights = useMemo(() => {
+    const points = snapKey.split(",").filter((point) => point.trim() !== "")
+      .map(Number).filter(Number.isFinite);
+    return points.length
+      ? sheetSnapOffsets(availableHeight, points).map((offset) => availableHeight - offset)
+      : responsiveSnapPoints(availableHeight, size);
+  }, [availableHeight, size, snapKey]);
+  const sheetHeight = Math.max(...visibleHeights);
+  const snapValues = useMemo(
+    () => visibleHeights.map((height) => sheetHeight - height),
+    [sheetHeight, visibleHeights],
+  );
 
   // Set initial position
   React.useEffect(() => {
     if (visible) {
-      translateY.value = withSpring(snapValues[initialSnap] || snapValues[0], {
-        damping: 15,
-        stiffness: 120,
+      translateY.value = withSpring(snapValues[initialSnap] ?? snapValues[0], {
+        damping: 24,
+        stiffness: 240,
       });
     } else {
       translateY.value = withSpring(SCREEN_HEIGHT, { damping: 15, stiffness: 120 });
     }
-  }, [visible, initialSnap, snapValues, translateY]);
+  }, [visible, initialSnap, snapValues, translateY, SCREEN_HEIGHT]);
 
   const gesture = Gesture.Pan()
     .onStart(() => {
-      context.value = translateY.value;
+      context.set(translateY.get());
     })
     .onUpdate((e) => {
-      const newValue = context.value - e.translationY;
-      // Clamp so sheet doesn't go off screen
-      const min = 0;
-      const max = snapValues[0] ?? 0;
-      translateY.value = Math.min(Math.max(newValue, min), max);
+      translateY.set(clampSheetDrag(context.get(), e.translationY, snapValues));
     })
-    .onEnd(() => {
-      // Snap to nearest point
-      const current = translateY.value;
-      let closest = snapValues[0];
-      let minDiff = Infinity;
-      for (const val of snapValues) {
-        const diff = Math.abs(current - val);
-        if (diff < minDiff) {
-          minDiff = diff;
-          closest = val;
-        }
-      }
-      translateY.value = withSpring(closest, { damping: 15, stiffness: 120 });
+    .onEnd((e) => {
+      translateY.set(withSpring(nearestSheetSnap(translateY.get(), e.velocityY, snapValues), { damping: 24, stiffness: 240 }));
     });
 
   const animatedStyle = useAnimatedStyle(() => ({

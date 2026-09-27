@@ -124,8 +124,18 @@ export default function UserDetailsScreen() {
   }, [userId]);
 
   useEffect(() => {
-    fetchUser();
-  }, [fetchUser]);
+    if (!userId) return;
+    apiFetch(`/admin/users/${userId}`)
+      .then((res) => setUser(res?.user ?? null))
+      .catch((error) => {
+        console.log("Fetch user failed:", error);
+        Alert.alert("Error", "Failed to load user details");
+      })
+      .finally(() => {
+        setLoading(false);
+        setRefreshing(false);
+      });
+  }, [userId]);
 
   const joinedDate = useMemo(
     () => formatDate(user?.createdAt),
@@ -195,7 +205,7 @@ export default function UserDetailsScreen() {
     }
   };
 
-  if (loading) {
+  if (loading && userId) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#0f172a" />

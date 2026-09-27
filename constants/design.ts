@@ -1,5 +1,30 @@
 import { Platform } from "react-native";
 
+export type LayoutSize = "small" | "medium" | "large" | "tablet";
+
+/** Visible sheet heights in dp, using the current safe-area-adjusted height. */
+export function snapPoints(
+  screenHeight: number,
+  size: LayoutSize = "medium",
+): [number, number, number] {
+  const ratios = size === "small"
+    ? [0.30, 0.65, 0.92] as const
+    : size === "tablet"
+      ? [0.22, 0.55, 0.88] as const
+      : [0.25, 0.60, 0.90] as const;
+
+  return [
+    screenHeight * ratios[0],
+    screenHeight * ratios[1],
+    screenHeight * ratios[2],
+  ];
+}
+
+/** Device-size adjustment only; native Text retains accessibility font scaling. */
+export function scaled(size: number, fontScale: number): number {
+  return size * fontScale;
+}
+
 /** Shared visual language for the Safirisha mobile experience. */
 export const design = {
   colors: {
