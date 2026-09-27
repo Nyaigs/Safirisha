@@ -1,4 +1,4 @@
-# dependencies
+# Dependencies
 node_modules/
 
 # Expo
@@ -6,6 +6,7 @@ node_modules/
 dist/
 web-build/
 expo-env.d.ts
+*.hbc
 
 # Native
 .kotlin/
@@ -15,40 +16,81 @@ expo-env.d.ts
 *.p12
 *.key
 *.mobileprovision
+/ios
+/android
+app-example
 
 # Metro
 .metro-health-check*
+.metro/
 
-# debug
+# Debug
 npm-debug.*
 yarn-debug.*
 yarn-error.*
 *.log
+*.log.*
 
-# macOS
+# macOS / OS
 .DS_Store
+Thumbs.db
 *.pem
+*.swp
+*.swo
 
-# env files
+# Environment — NEVER commit
 .env
 .env.*
 !.env.example
 backend/.env
 backend/.env.*
 
-# typescript
+# TypeScript
 *.tsbuildinfo
 
-# backups
+# Backups
 backups/
 
-# generated native folders
-/ios
-/android
-
-# optional old template folder
-app-example
-
-# build outputs
+# Build output
 coverage/
 backend/dist/
+
+# Runtime uploads (keep folders, ignore contents)
+backend/uploads/*
+!backend/uploads/vehicles/
+!backend/uploads/vehicles/.gitkeep
+!backend/uploads/ownership/
+!backend/uploads/ownership/.gitkeep
+!backend/uploads/README.md
+
+# Editors / IDE
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+
+# Temporary
+tmp/
+temp/
+*.tmp
+
+# Cache
+.cache/
+# Runtime uploads (keep folders, ignore contents)
+backend/uploads/*
+!backend/uploads/vehicles/
+!backend/uploads/vehicles/.gitkeep
+!backend/uploads/ownership/
+!backend/uploads/ownership/.gitkeep
+!backend/uploads/README.md
+
+# Temporary
+tmp/
+temp/
+*.tmp
+
+# Editors
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json

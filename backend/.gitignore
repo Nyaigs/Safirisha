@@ -1,5 +1,47 @@
-node_modules
-# Keep environment variables out of version control
-.env
+# Dependencies
+node_modules/
 
+# Environment — NEVER commit
+.env
+.env.*
+!.env.example
+
+# Prisma generated
 /generated/prisma
+
+# Prisma local databases
+prisma/*.db
+prisma/*.sqlite
+prisma/*.sqlite3
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Runtime uploads (keep folders, ignore contents)
+uploads/*
+!uploads/vehicles/
+!uploads/vehicles/.gitkeep
+!uploads/ownership/
+!uploads/ownership/.gitkeep
+!uploads/README.md
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Test coverage
+coverage/
+*.lcov
+
+# OS / Editors
+.DS_Store
+Thumbs.db
+.idea/
+
+# Runtime
+tmp/
+temp/
+*.tmp
