@@ -17,7 +17,6 @@ import { useLayout } from "../../constants/layout";
 
 type Props = {
   visible: boolean;
-  /** Kept for compatibility with sheets that are controlled externally. */
   onClose?: () => void;
   children: React.ReactNode;
   snapPoints?: number[];
@@ -33,7 +32,7 @@ export function BottomSheet({
 }: Props) {
   const { height: SCREEN_HEIGHT, isSmall, isTablet } = useLayout();
   const insets = useSafeAreaInsets();
-  const translateY = useSharedValue(0);
+  const translateY = useSharedValue(SCREEN_HEIGHT);
   const context = useSharedValue(0);
   const availableHeight = Math.max(0, SCREEN_HEIGHT - insets.top);
   const size = isSmall ? "small" : isTablet ? "tablet" : "medium";
@@ -46,13 +45,14 @@ export function BottomSheet({
       ? sheetSnapOffsets(availableHeight, points).map((offset) => availableHeight - offset)
       : responsiveSnapPoints(availableHeight, size);
   }, [availableHeight, size, snapKey]);
-  const sheetHeight = Math.max(...visibleHeights);
+
+  // translateY = where the top of the sheet sits (0 = top of screen, SCREEN_HEIGHT = hidden)
+  // height of sheet = SCREEN_HEIGHT - translateY
   const snapValues = useMemo(
-    () => visibleHeights.map((height) => sheetHeight - height),
-    [sheetHeight, visibleHeights],
+    () => visibleHeights.map((height) => SCREEN_HEIGHT - height),
+    [SCREEN_HEIGHT, visibleHeights],
   );
 
-  // Set initial position
   React.useEffect(() => {
     if (visible) {
       translateY.value = withSpring(snapValues[initialSnap] ?? snapValues[0], {
@@ -72,12 +72,20 @@ export function BottomSheet({
       translateY.set(clampSheetDrag(context.get(), e.translationY, snapValues));
     })
     .onEnd((e) => {
-      translateY.set(withSpring(nearestSheetSnap(translateY.get(), e.velocityY, snapValues), { damping: 24, stiffness: 240 }));
+      translateY.set(
+        withSpring(nearestSheetSnap(translateY.get(), e.velocityY, snapValues), {
+          damping: 24,
+          stiffness: 240,
+        })
+      );
     });
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
-  }));
+  const animatedStyle = useAnimatedStyle(() => {
+    const height = SCREEN_HEIGHT - translateY.value;
+    return {
+      height: Math.max(0, Math.min(height, SCREEN_HEIGHT)),
+    };
+  });
 
   if (!visible) return null;
 
@@ -87,11 +95,15 @@ export function BottomSheet({
         pointerEvents="none"
         style={[styles.overlay, { backgroundColor: "rgba(0,0,0,0.4)" }]}
       />
-      <Animated.View style={[styles.sheet, animatedStyle, { height: sheetHeight, paddingBottom: insets.bottom + 16 }]}>
+      <Animated.View style={[styles.sheet, animatedStyle]}>
         <GestureDetector gesture={gesture}>
-          <View style={styles.handle} />
+          <View style={styles.handleArea}>
+            <View style={styles.handle} />
+          </View>
         </GestureDetector>
-        {children}
+        <View style={[styles.content, { paddingBottom: insets.bottom + 16 }]}>
+          {children}
+        </View>
       </Animated.View>
     </GestureHandlerRootView>
   );
@@ -128,13 +140,21 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 12,
     elevation: 10,
+    overflow: "hidden",
+  },
+  handleArea: {
+    alignSelf: "center",
+    paddingVertical: 6,
+    paddingHorizontal: 60,
+    marginBottom: design.spacing.sm,
   },
   handle: {
-    alignSelf: "center",
     height: 5,
     width: 44,
     borderRadius: design.radius.pill,
     backgroundColor: "#B9C6C1",
-    marginBottom: design.spacing.sm,
+  },
+  content: {
+    flex: 1,
   },
 });

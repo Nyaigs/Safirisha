@@ -9,6 +9,7 @@ import { errorHandler, notFound } from "./middleware/error.middleware";
 import adminRoutes from "./routes/admin.routes";
 import authRoutes from "./routes/auth.routes";
 import driverRoutes from "./routes/driver.routes";
+import notificationRoutes from "./routes/notification.routes";
 import paymentRoutes from "./routes/payment.routes";
 import tripRoutes from "./routes/trip.routes";
 import userRoutes from "./routes/user.routes";
@@ -61,6 +62,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/drivers", driverRoutes);
 app.use("/api/trips", tripRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/notifications", notificationRoutes);
 app.use("/api/admin", adminRoutes);
 
 // DB ping endpoint – keeps Neon awake

@@ -5,9 +5,76 @@ import { prisma } from "../lib/prisma";
 import { AuthRequest } from "../middleware/auth.middleware";
 import { buildTripFinancials, calculateTripPrice, isVehicleSuitableForLoad } from "../services/trip-pricing.service";
 import { DRIVER_LOCATION_MAX_AGE_MS, findNearbyDrivers, hasFreshDriverLocation } from "../services/dispatch.service";
+import { createNotification } from "../services/notification.service";
 import { getExpiryDate } from "../services/trip.service";
 
 const DRIVER_ACCEPT_RADIUS_KM = 10;
+
+const STATUS_NOTIFICATIONS: Partial<
+  Record<RequestStatus, { type: any; title: string; message: string }>
+> = {
+  DRIVER_EN_ROUTE: {
+    type: "driver_en_route",
+    title: "Driver on the way",
+    message: "Your driver is heading to the pickup location.",
+  },
+  ARRIVED_PICKUP: {
+    type: "driver_arrived_pickup",
+    title: "Driver has arrived",
+    message: "Your driver is at the pickup location.",
+  },
+  PICKUP_CONFIRMED: {
+    type: "pickup_confirmed",
+    title: "Pickup confirmed",
+    message: "Your delivery has been picked up and is on the way.",
+  },
+  IN_TRANSIT: {
+    type: "in_transit",
+    title: "In transit",
+    message: "Your delivery is on the move.",
+  },
+  ARRIVED_DROPOFF: {
+    type: "arrived_dropoff",
+    title: "Driver has arrived",
+    message: "Your driver has arrived at the drop-off location.",
+  },
+  DELIVERY_CONFIRMED: {
+    type: "delivery_confirmed",
+    title: "Delivery confirmed",
+    message: "Your delivery has been confirmed.",
+  },
+  COMPLETED: {
+    type: "trip_completed",
+    title: "Trip completed",
+    message: "Your trip has been completed. Tap to rate your driver.",
+  },
+  DELIVERED: {
+    type: "trip_completed",
+    title: "Trip completed",
+    message: "Your trip has been completed. Tap to rate your driver.",
+  },
+};
+
+async function notifyCustomerTripStatus(trip: {
+  id: string;
+  customerId: string;
+  status: RequestStatus;
+}) {
+  const template = STATUS_NOTIFICATIONS[trip.status];
+  if (!template) return;
+  try {
+    await createNotification({
+      userId: trip.customerId,
+      type: template.type,
+      title: template.title,
+      message: template.message,
+      tripId: trip.id,
+    });
+  } catch (error) {
+    console.error("notifyCustomerTripStatus failed:", error);
+  }
+}
+
 
 function hasValidCoordinates(lat: number | null, lng: number | null) {
   return lat !== null && lng !== null && Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
@@ -598,6 +665,18 @@ export async function acceptTripRequest(req: AuthRequest, res: Response) {
       },
     });
 
+    try {
+      await createNotification({
+        userId: updatedTrip.customerId,
+        type: "trip_accepted",
+        title: "Driver found",
+        message: `${driver.user.fullName} accepted your trip and is preparing to move.`,
+        tripId: updatedTrip.id,
+      });
+    } catch (notifyError) {
+      console.error("accept notification failed:", notifyError);
+    }
+
     return res.json({
       message: "Trip accepted successfully",
       trip: updatedTrip,
@@ -713,6 +792,12 @@ export async function updateTripStatus(req: AuthRequest, res: Response) {
     });
 
     emitTripUpdated(req, updatedTrip);
+
+    await notifyCustomerTripStatus({
+      id: updatedTrip.id,
+      customerId: updatedTrip.customerId,
+      status: updatedTrip.status,
+    });
 
     return res.json({
       message: "Trip status updated successfully",

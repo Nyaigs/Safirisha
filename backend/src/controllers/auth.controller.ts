@@ -1,5 +1,5 @@
 import { createClerkClient } from "@clerk/backend";
-import bcrypt from "bcryptjs";
+import bcrypt from "bcrypt";
 import { Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { prisma } from "../lib/prisma";

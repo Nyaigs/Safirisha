@@ -11,8 +11,8 @@
     "lint": "expo lint"
   },
   "dependencies": {
-    "@expo/ngrok": "npm:expo-cloudflared@^4.2.1",
     "@clerk/expo": "^3.1.6",
+    "@expo/ngrok": "npm:expo-cloudflared@^4.2.1",
     "@expo/vector-icons": "^15.0.3",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-native-community/datetimepicker": "9.1.0",
@@ -23,6 +23,7 @@
     "@sentry/react-native": "~7.11.0",
     "axios": "^1.13.6",
     "expo": "^57.0.22",
+    "expo-cloudflare-tunnel": "^0.3.5",
     "expo-constants": "~57.0.18",
     "expo-font": "~57.0.4",
     "expo-haptics": "~57.0.3",
@@ -38,7 +39,6 @@
     "expo-system-ui": "~57.0.4",
     "expo-web-browser": "~57.0.3",
     "nativewind": "^4.2.2",
-    "node-cron": "^4.2.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
@@ -56,7 +56,6 @@
     "zustand": "^5.0.11"
   },
   "devDependencies": {
-    "@types/node-cron": "^3.0.11",
     "@types/react": "~19.2.4",
     "babel-plugin-module-resolver": "^5.0.3",
     "babel-preset-expo": "~57.0.0",

@@ -35,11 +35,11 @@ export default function CustomerLayout() {
     <ErrorBoundary>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="request" />
         <Stack.Screen name="searching" />
         <Stack.Screen name="driver-found" />
         <Stack.Screen name="live-trip" />
         <Stack.Screen name="rate-trip" />
+        <Stack.Screen name="notifications" />
         <Stack.Screen name="settings" />
         <Stack.Screen name="privacy" />
         <Stack.Screen name="edit-profile" />

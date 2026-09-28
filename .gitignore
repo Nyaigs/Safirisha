@@ -94,3 +94,7 @@ temp/
 .vscode/*
 !.vscode/settings.json
 !.vscode/extensions.json
+
+# Local backups (dev safety only)
+.backups/
+*.backup

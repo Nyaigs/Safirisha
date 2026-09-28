@@ -8,8 +8,8 @@ import { getExpiryDate } from "./trip.service";
  * conditional update keeps this safe when a driver accepts at the same time.
  */
 export async function expireStaleSearchingTrips(io?: Server) {
-  const now = new Date();
-  const staleTrips = await prisma.transportRequest.findMany({
+    const now = new Date();
+    const staleTrips = await prisma.transportRequest.findMany({
     where: {
       status: { in: ["SEARCHING", "SEARCHING_DRIVER"] },
       assignedDriverId: null,
