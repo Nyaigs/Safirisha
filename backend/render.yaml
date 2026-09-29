@@ -3,9 +3,8 @@ services:
     name: safirisha-backend
     env: node
     plan: free
-    buildCommand: npm install && npx prisma generate && npm run build
+    buildCommand: npm install && npx prisma generate && npm run build && npx prisma migrate deploy
     startCommand: npm start
-    preDeployCommand: npx prisma migrate deploy
     healthCheckPath: /health
     autoDeploy: true
     envVars:
