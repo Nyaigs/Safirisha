@@ -479,7 +479,9 @@ export default function HomeScreen() {
         onSelectPickup={(place) => {
           flow.choosePickup(place);
           moveTo(place);
-          flow.setStep("dropoff");
+          // Reopen for dropoff now that pickup is set
+          setSearchField("dropoff");
+          setSearchOpen(true);
         }}
         onSelectDropoff={(place) => {
           flow.chooseDropoff(place);

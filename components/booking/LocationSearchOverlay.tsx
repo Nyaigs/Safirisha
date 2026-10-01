@@ -94,16 +94,22 @@ export function LocationSearchOverlay({
             : undefined,
         );
         if (requestId === requestIdRef.current) {
-          setResults(
-            places.map((place) => ({
+          // Dedupe by id — Geoapify sometimes returns the same place twice
+          const seen = new Set<string>();
+          const deduped: SearchResult[] = [];
+          for (const place of places) {
+            if (seen.has(place.id)) continue;
+            seen.add(place.id);
+            deduped.push({
               id: place.id,
               name: place.name,
               address: place.address,
               latitude: place.latitude,
               longitude: place.longitude,
               distanceKm: place.distanceKm,
-            })),
-          );
+            });
+          }
+          setResults(deduped);
         }
       } catch (searchError) {
         if (requestId !== requestIdRef.current) return;
@@ -131,17 +137,23 @@ export function LocationSearchOverlay({
 
   const handleSelect = (place: SearchResult) => {
     const point: AppLocation = { ...place, placeId: place.id };
-    if (activeField === "pickup") onSelectPickup(point);
-    else onSelectDropoff(point);
+    // Close modal FIRST so its dismissal animation plays before the
+    // sheet behind it advances to the next step. Prevents the flash.
     onClose();
+    setTimeout(() => {
+      if (activeField === "pickup") onSelectPickup(point);
+      else onSelectDropoff(point);
+    }, 260);
   };
 
   const handleCurrentLocation = async () => {
     const point = await onUseCurrentLocation();
     if (!point) return;
-    if (activeField === "pickup") onSelectPickup(point);
-    else onSelectDropoff(point);
     onClose();
+    setTimeout(() => {
+      if (activeField === "pickup") onSelectPickup(point);
+      else onSelectDropoff(point);
+    }, 260);
   };
 
   const handlePickOnMap = () => {

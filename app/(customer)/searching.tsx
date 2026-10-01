@@ -85,6 +85,7 @@ export default function SearchingScreen() {
 
   const [socketConnected, setSocketConnected] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [timedOut, setTimedOut] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState<number>(300);
 
   const [vehicleTranslateAnim] = useState(() => new Animated.Value(0));
@@ -137,6 +138,10 @@ export default function SearchingScreen() {
     },
     [],
   );
+
+  const handleTryAgain = useCallback(() => {
+    router.replace("/(customer)/(tabs)");
+  }, []);
 
   const handleCancelRequest = useCallback(async () => {
     if (!safeTripId) {
@@ -333,6 +338,7 @@ export default function SearchingScreen() {
         Math.floor((new Date(expiresAtRef.current).getTime() - Date.now()) / 1000),
       );
       setSecondsLeft(secs);
+      if (secs === 0) setTimedOut(true);
     }, 1000);
     return () => clearInterval(tick);
   }, []);
@@ -452,6 +458,26 @@ export default function SearchingScreen() {
             )}
           </TouchableOpacity>
         </View>
+
+        {timedOut && (
+          <View style={styles.timeoutOverlay}>
+            <View style={styles.timeoutCard}>
+              <View style={styles.timeoutIcon}>
+                <Ionicons name="alert-circle-outline" size={44} color={design.colors.muted} />
+              </View>
+              <Text style={styles.timeoutTitle}>No drivers found</Text>
+              <Text style={styles.timeoutSubtitle}>
+                We couldn&apos;t find a {vehicleLabel} near your pickup point. Try again or book later.
+              </Text>
+              <TouchableOpacity style={styles.timeoutPrimary} onPress={handleTryAgain}>
+                <Text style={styles.timeoutPrimaryText}>Try again</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.timeoutSecondary} onPress={handleCancelRequest}>
+                <Text style={styles.timeoutSecondaryText}>Cancel request</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -641,5 +667,78 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.7,
+  },
+  timeoutOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: design.spacing.lg,
+  },
+  timeoutCard: {
+    backgroundColor: design.colors.surface,
+    borderRadius: design.radius.xl,
+    padding: design.spacing.lg,
+    alignItems: "center",
+    width: "100%",
+    maxWidth: 400,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    elevation: 16,
+  },
+  timeoutIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: design.colors.subtle,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: design.spacing.md,
+  },
+  timeoutTitle: {
+    fontSize: 22,
+    fontWeight: "900",
+    color: design.colors.ink,
+    marginBottom: design.spacing.xs,
+    textAlign: "center",
+  },
+  timeoutSubtitle: {
+    fontSize: 14,
+    color: design.colors.muted,
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: design.spacing.lg,
+  },
+  timeoutPrimary: {
+    backgroundColor: design.colors.brand,
+    paddingVertical: design.spacing.md,
+    paddingHorizontal: design.spacing.lg,
+    borderRadius: design.radius.lg,
+    alignItems: "center",
+    width: "100%",
+    marginBottom: design.spacing.sm,
+  },
+  timeoutPrimaryText: {
+    color: design.colors.white,
+    fontWeight: "800",
+    fontSize: 15,
+  },
+  timeoutSecondary: {
+    paddingVertical: design.spacing.md,
+    paddingHorizontal: design.spacing.lg,
+    borderRadius: design.radius.lg,
+    alignItems: "center",
+    width: "100%",
+  },
+  timeoutSecondaryText: {
+    color: design.colors.muted,
+    fontWeight: "700",
+    fontSize: 14,
   },
 });
