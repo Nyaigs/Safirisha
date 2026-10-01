@@ -68,7 +68,7 @@ export default function DriverDashboard() {
     return () => clearInterval(timer);
   }, []);
 
-  const gpsIsStale = lastGpsAt === null || gpsClock - lastGpsAt > 30_000;
+  const gpsIsStale = lastGpsAt === null || gpsClock - lastGpsAt > 90_000;
 
   const vehicleIcon = useMemo(
     () => getVehicleIcon(driverProfile?.vehicleType),
@@ -136,7 +136,7 @@ export default function DriverDashboard() {
     }
 
     watchRef.current = await Location.watchPositionAsync(
-      { accuracy: Location.Accuracy.Balanced, timeInterval: 15000, distanceInterval: 25 },
+      { accuracy: Location.Accuracy.Balanced, timeInterval: 15000, distanceInterval: 0 },
       async (l) => {
         setLastGpsAt(l.timestamp || Date.now());
         try {
@@ -164,6 +164,39 @@ export default function DriverDashboard() {
       sub.remove();
     };
   }, [isOnline, startLocationTracking, stopLocationTracking]);
+
+  // Heartbeat: force-refresh location every 45s while online.
+  // iOS throttles watchPositionAsync when stationary, so this guarantees
+  // lastLocationAt stays fresh enough for dispatch (< 2 min threshold).
+  useEffect(() => {
+    if (!isOnline) return;
+    let cancelled = false;
+
+    const ping = async () => {
+      if (cancelled) return;
+      try {
+        const loc = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        if (cancelled) return;
+        setLastGpsAt(loc.timestamp || Date.now());
+        await apiFetch("/drivers/me/location", {
+          method: "PATCH",
+          body: { lat: loc.coords.latitude, lng: loc.coords.longitude },
+        });
+      } catch {
+        // silent — next tick retries
+      }
+    };
+
+    void ping();
+    const id = setInterval(() => { void ping(); }, 45_000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [isOnline]);
 
   useEffect(() => {
     const pulse = Animated.loop(
@@ -388,30 +421,6 @@ export default function DriverDashboard() {
         </Pressable>
       ) : null}
 
-      <View style={styles.quickActions}>
-        <Pressable
-          style={({ pressed }) => [styles.quickAction, pressed && styles.cardPressed]}
-          onPress={() => router.push("/(driver)/jobs")}
-        >
-          <MaterialCommunityIcons name="briefcase-search" size={24} color={design.colors.brand} />
-          <Text style={styles.quickActionLabel}>Jobs</Text>
-        </Pressable>
-        <Pressable
-          style={({ pressed }) => [styles.quickAction, pressed && styles.cardPressed]}
-          onPress={() => router.push("/(driver)/earnings")}
-        >
-          <MaterialCommunityIcons name="wallet" size={24} color={design.colors.success} />
-          <Text style={styles.quickActionLabel}>Earnings</Text>
-        </Pressable>
-        <Pressable
-          style={({ pressed }) => [styles.quickAction, pressed && styles.cardPressed]}
-          onPress={() => router.push("/(driver)/profile")}
-        >
-          <Ionicons name="person-outline" size={24} color={design.colors.muted} />
-          <Text style={styles.quickActionLabel}>Profile</Text>
-        </Pressable>
-      </View>
-
       <View style={styles.locationCard}>
         <Ionicons name="location-outline" size={16} color={design.colors.muted} />
         <Text style={styles.locationText}>{locationLabel}</Text>
@@ -563,17 +572,6 @@ const styles = StyleSheet.create({
   },
   activeTripPrice: { fontSize: 18, fontWeight: "900", color: design.colors.success },
   activeTripView: { fontSize: 14, fontWeight: "800", color: design.colors.brand },
-  quickActions: { flexDirection: "row", gap: design.spacing.sm, marginBottom: design.spacing.md },
-  quickAction: {
-    flex: 1,
-    backgroundColor: design.colors.white,
-    borderRadius: design.radius.lg,
-    padding: design.spacing.md,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-  },
-  quickActionLabel: { fontSize: 12, fontWeight: "700", color: design.colors.muted, marginTop: design.spacing.xs },
   locationCard: {
     flexDirection: "row",
     alignItems: "center",

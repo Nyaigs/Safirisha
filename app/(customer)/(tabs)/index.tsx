@@ -3,7 +3,7 @@ import * as Location from "expo-location";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import MapView, { MapPressEvent, Marker, Polyline, PROVIDER_GOOGLE } from "react-native-maps";
+import MapView, { MapPressEvent, Marker, Polyline, PROVIDER_GOOGLE } from "../../../components/ui/map-view";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BookingSheet } from "../../../components/booking/BookingSheet";
 import { LocationSearchOverlay } from "../../../components/booking/LocationSearchOverlay";

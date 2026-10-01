@@ -13,7 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import MapView, { Marker, Polyline } from "react-native-maps";
+import MapView, { Marker, Polyline } from "../../components/ui/map-view";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { ListSkeleton } from "../../components/ui/skeleton";
 import { design } from "../../constants/design";

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
-import MapView, { Marker } from "react-native-maps";
+import MapView, { Marker } from "../../components/ui/map-view";
 import { apiFetch } from "../../lib/api";
 import { subscribeToDriverLocationUpdated } from "../../lib/socket";
 

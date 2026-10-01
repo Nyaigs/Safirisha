@@ -114,7 +114,7 @@ export function BookingSheet({ flow, currentLocation, loadingLocation, submittin
             <Text style={styles.title}>Choose a vehicle</Text>
             <Text style={styles.subtitle}>{flow.distanceKm} km straight-line distance, not road distance. Driver availability is checked after requesting.</Text>
             {VEHICLES.filter((item) => flow.suitableVehicleIds.includes(item.id)).map((item) => {
-              const price = getPriceBreakdown(item.id, flow.loadSize, flow.distanceKm).total;
+              const price = getPriceBreakdown(item.id, flow.loadSize, flow.distanceKm, flow.fragile).total;
               const selected = flow.selectedVehicle === item.id;
               return (
                 <TouchableOpacity key={item.id} onPress={() => flow.setVehicle(item.id as VehicleId)} style={[styles.vehicle, selected && styles.optionActive]}>
@@ -131,7 +131,7 @@ export function BookingSheet({ flow, currentLocation, loadingLocation, submittin
         )}
 
         {flow.step === "confirm" && (() => {
-          const breakdown = getPriceBreakdown(flow.selectedVehicle, flow.loadSize, flow.distanceKm);
+          const breakdown = getPriceBreakdown(flow.selectedVehicle, flow.loadSize, flow.distanceKm, flow.fragile);
           return (
             <>
               <Text style={styles.title}>Ready to request?</Text>
@@ -143,6 +143,15 @@ export function BookingSheet({ flow, currentLocation, loadingLocation, submittin
                 <Text style={styles.actionMeta}>Distance ({flow.distanceKm} km) · KES {breakdown.distanceCharge.toLocaleString()}</Text>
                 {breakdown.loadAdjustment > 0 && (
                   <Text style={styles.actionMeta}>Load adjustment · KES {breakdown.loadAdjustment.toLocaleString()}</Text>
+                )}
+                {breakdown.fragileAdjustment > 0 && (
+                  <Text style={styles.actionMeta}>Handle with care · +KES {breakdown.fragileAdjustment.toLocaleString()}</Text>
+                )}
+                {breakdown.surgeMultiplier > 1 && (
+                  <Text style={styles.actionMeta}>{breakdown.surgeReason} · ×{breakdown.surgeMultiplier.toFixed(2)} · +KES {breakdown.surgeAdjustment.toLocaleString()}</Text>
+                )}
+                {breakdown.appliedMinFare && (
+                  <Text style={styles.actionMeta}>Minimum fare applied</Text>
                 )}
                 <Text style={styles.total}>Estimated total · KES {breakdown.total.toLocaleString()}</Text>
               </View>

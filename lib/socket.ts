@@ -22,7 +22,7 @@ function getToken() {
 
 function createSocket() {
   return io(SOCKET_BASE_URL, {
-    transports: ["websocket"],
+    transports: ["websocket", "polling"],
     autoConnect: false,
     auth: { token: getToken() },
     reconnection: true,
