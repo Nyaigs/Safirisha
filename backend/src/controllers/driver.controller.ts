@@ -122,7 +122,7 @@ export async function getNearbyTripRequests(req: AuthRequest, res: Response) {
        },
        include: { customer: { select: { id: true, fullName: true, phone: true } } },
        orderBy: { createdAt: "desc" },
-       take: 20,
+       take: 50,
      });
 
     const driverLat = driver.currentLat;
@@ -132,7 +132,7 @@ export async function getNearbyTripRequests(req: AuthRequest, res: Response) {
     const nearbyTrips = trips
       .filter((trip) => normalizeVehicleType(trip.vehicleType) === normalizeVehicleType(driver.vehicleType))
       .map((trip) => ({ ...trip, distanceToPickupKm: calculateDistanceKm(driverLat, driverLng, trip.pickupLat, trip.pickupLng) }))
-      .filter((trip) => trip.distanceToPickupKm <= 10);
+      .filter((trip) => trip.distanceToPickupKm <= 25);
 
     return res.json({ trips: nearbyTrips });
   } catch (error) {
