@@ -19,6 +19,7 @@ import { ListSkeleton } from "../../components/ui/skeleton";
 import { design } from "../../constants/design";
 import { useLayout } from "../../constants/layout";
 import { connectSocket, joinTripRoom, leaveTripRoom } from "../../lib/socket";
+import { maps } from "../../lib/maps";
 import { useTripStore } from "../../store/trip";
 import type {
   DriverLiveLocation,
@@ -143,6 +144,7 @@ export default function LiveTripScreen() {
   const tripError = useTripStore((s) => s.error);
   const fetchTrip = useTripStore((s) => s.fetchTrip);
   const cancelTrip = useTripStore((s) => s.cancelTrip);
+  const [routeCoords, setRouteCoords] = useState<{ latitude: number; longitude: number }[]>([]);
   const confirmPickupAction = useTripStore((s) => s.confirmPickup);
   const confirmDeliveryAction = useTripStore((s) => s.confirmDelivery);
   const selectPaymentMethod = useTripStore((s) => s.selectPaymentMethod);
@@ -533,6 +535,33 @@ export default function LiveTripScreen() {
   const showPaymentOptions = currentStatus === "DELIVERY_CONFIRMED" && !currentPaymentMethod;
   const showPaymentPendingInfo = currentStatus === "PAYMENT_PENDING";
 
+  useEffect(() => {
+    if (!trip?.pickupLat || !trip?.dropoffLat) return;
+    const isEnRoute = ["ACCEPTED", "DRIVER_EN_ROUTE", "ARRIVED_PICKUP"].includes(currentStatus);
+    const origin = isEnRoute
+      ? { lat: driverLocation?.lat ?? trip.pickupLat, lng: driverLocation?.lng ?? trip.pickupLng }
+      : { lat: trip.pickupLat, lng: trip.pickupLng };
+    const destination = isEnRoute
+      ? { lat: trip.pickupLat, lng: trip.pickupLng }
+      : { lat: trip.dropoffLat, lng: trip.dropoffLng };
+
+    if (!Number.isFinite(origin.lat) || !Number.isFinite(destination.lat)) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const route = await maps.getRoute(origin, destination);
+        const polyline = route?.polyline;
+        if (!cancelled && polyline && polyline.length >= 2) {
+          setRouteCoords(polyline);
+        }
+      } catch {
+        /* fallback to straight line */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [trip?.pickupLat, trip?.dropoffLat, currentStatus, driverLocation?.lat, driverLocation?.lng]);
+
   const routeLineCoordinates = driverLocation
     ? [
         { latitude: driverLocation.lat, longitude: driverLocation.lng },
@@ -580,8 +609,8 @@ export default function LiveTripScreen() {
             <Ionicons name="location" size={16} color={design.colors.white} />
           </View>
         </Marker>
-        {routeLineCoordinates.length === 2 ? (
-          <Polyline coordinates={routeLineCoordinates} strokeWidth={4} strokeColor={design.colors.ink} />
+        {routeCoords.length >= 2 || routeLineCoordinates.length === 2 ? (
+          <Polyline coordinates={routeCoords.length >= 2 ? routeCoords : routeLineCoordinates} strokeWidth={4} strokeColor={design.colors.ink} />
         ) : null}
         {driverLocation ? (
           <Marker
@@ -754,20 +783,27 @@ export default function LiveTripScreen() {
           )}
 
           {currentStatus === "ARRIVED_DROPOFF" && (
-            <TouchableOpacity
-              style={[styles.actionButton, isSubmitting && styles.buttonDisabled]}
-              onPress={handleConfirmDelivery}
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? (
-                <ActivityIndicator color={design.colors.white} />
-              ) : (
-                <>
-                  <Ionicons name="checkmark-done-circle-outline" size={18} color={design.colors.white} />
-                  <Text style={styles.actionButtonText}>Confirm Delivery Received</Text>
-                </>
-              )}
-            </TouchableOpacity>
+            <View style={styles.priorityBanner}>
+              <View style={styles.priorityHeader}>
+                <Ionicons name="checkmark-done-circle" size={20} color={design.colors.brand} />
+                <Text style={styles.priorityTitle}>Your delivery has arrived</Text>
+              </View>
+              <Text style={styles.prioritySubtitle}>Receive your goods, then confirm below.</Text>
+              <TouchableOpacity
+                style={[styles.priorityButton, isSubmitting && styles.buttonDisabled]}
+                onPress={handleConfirmDelivery}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator color={design.colors.white} />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark-done-circle" size={20} color={design.colors.white} />
+                    <Text style={styles.priorityButtonText}>Confirm delivery received</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
           )}
 
           {showPaymentOptions && (
@@ -1276,4 +1312,10 @@ const styles = StyleSheet.create({
     borderRadius: design.radius.md,
   },
   primaryButtonText: { color: design.colors.white, fontWeight: "800" },
+  priorityBanner: { backgroundColor: design.colors.brandSoft, borderRadius: design.radius.lg, padding: design.spacing.md, marginBottom: design.spacing.md, borderWidth: 2, borderColor: design.colors.brand },
+  priorityHeader: { flexDirection: "row", alignItems: "center", gap: design.spacing.xs, marginBottom: design.spacing.xs },
+  priorityTitle: { ...design.typography.heading, color: design.colors.ink, flex: 1 },
+  prioritySubtitle: { ...design.typography.body, color: design.colors.muted, marginBottom: design.spacing.md },
+  priorityButton: { backgroundColor: design.colors.brand, paddingVertical: 16, borderRadius: design.radius.md, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: design.spacing.sm },
+  priorityButtonText: { ...design.typography.label, color: design.colors.white, fontWeight: "800", fontSize: 15 },
 });

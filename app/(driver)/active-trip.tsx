@@ -18,6 +18,7 @@ import { design } from "../../constants/design";
 import { useLayout } from "../../constants/layout";
 import { apiFetch } from "../../lib/api";
 import { connectSocket } from "../../lib/socket";
+import { maps } from "../../lib/maps";
 import { useTripStore } from "../../store/trip";
 import {
   DriverLiveLocation,
@@ -461,8 +462,34 @@ export default function ActiveTripScreen() {
     );
   }
 
+  const [routeCoords, setRouteCoords] = useState<{ latitude: number; longitude: number }[]>([]);
   const waitingAtPickup = currentStatus === "ARRIVED_PICKUP";
   const waitingAtDropoff = currentStatus === "ARRIVED_DROPOFF";
+
+  useEffect(() => {
+    if (!pickupLat || !dropoffLat) return;
+    const isEnRoute = ["ACCEPTED", "DRIVER_EN_ROUTE", "ARRIVED_PICKUP"].includes(currentStatus);
+    const origin = isEnRoute
+      ? { lat: driverLocation?.lat ?? pickupLat, lng: driverLocation?.lng ?? pickupLng }
+      : { lat: pickupLat, lng: pickupLng };
+    const destination = isEnRoute
+      ? { lat: pickupLat, lng: pickupLng }
+      : { lat: dropoffLat, lng: dropoffLng };
+
+    if (!Number.isFinite(origin.lat) || !Number.isFinite(destination.lat)) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const route = await maps.getRoute(origin, destination);
+        const polyline = route?.polyline;
+        if (!cancelled && polyline && polyline.length >= 2) {
+          setRouteCoords(polyline);
+        }
+      } catch { /* fallback */ }
+    })();
+    return () => { cancelled = true; };
+  }, [pickupLat, dropoffLat, currentStatus, driverLocation?.lat, driverLocation?.lng]);
 
   const routeLineCoordinates =
     driverLocation && isValidCoordinate(driverLocation.lat) && isValidCoordinate(driverLocation.lng)
@@ -499,8 +526,8 @@ export default function ActiveTripScreen() {
               </View>
             </Marker>
           ) : null}
-          {routeLineCoordinates.length === 2 ? (
-            <Polyline coordinates={routeLineCoordinates} strokeWidth={4} strokeColor={design.colors.ink} />
+          {routeCoords.length >= 2 || routeLineCoordinates.length === 2 ? (
+            <Polyline coordinates={routeCoords.length >= 2 ? routeCoords : routeLineCoordinates} strokeWidth={4} strokeColor={design.colors.ink} />
           ) : null}
           {driverLocation && isValidCoordinate(driverLocation.lat) && isValidCoordinate(driverLocation.lng) ? (
             <Marker coordinate={{ latitude: driverLocation.lat, longitude: driverLocation.lng }} title="You">
