@@ -8,7 +8,7 @@ import { DRIVER_LOCATION_MAX_AGE_MS, findNearbyDrivers, hasFreshDriverLocation }
 import { createNotification } from "../services/notification.service";
 import { getExpiryDate } from "../services/trip.service";
 
-const DRIVER_ACCEPT_RADIUS_KM = 10;
+const DRIVER_ACCEPT_RADIUS_KM = 25;
 
 const STATUS_NOTIFICATIONS: Partial<
   Record<RequestStatus, { type: any; title: string; message: string }>

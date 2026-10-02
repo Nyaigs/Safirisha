@@ -103,11 +103,10 @@ export async function apiFetch(path: string, options: ApiFetchOptions = {}) {
           ? String((data as { message?: unknown }).message)
           : `Request failed with status ${response.status}`;
 
-      if (
-        response.status === 401 ||
-        response.status === 403 ||
-        isAuthErrorMessage(message)
-      ) {
+      // Only log out on real auth failures (401 or specific auth messages).
+      // Business 403s ("outside radius", "vehicle unsuitable") must NOT
+      // clear the session — they're rejections, not auth problems.
+      if (response.status === 401 || isAuthErrorMessage(message)) {
         clearBrokenSession();
       }
 
