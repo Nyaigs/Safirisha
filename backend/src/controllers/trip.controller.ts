@@ -201,7 +201,7 @@ async function emitNewTripCreated(req: AuthRequest, trip: any) {
     lat: trip.pickupLat,
     lng: trip.pickupLng,
     vehicleType: trip.vehicleType,
-    radiusKm: 10,
+    radiusKm: 25,
   });
   for (const candidate of candidates) io.to(`user:${candidate.userId}`).emit("new_trip_created", trip);
   io.emit("admin_stats_updated");

@@ -61,7 +61,7 @@ export async function findNearbyDrivers({
   lat,
   lng,
   vehicleType,
-  radiusKm = 15,
+  radiusKm = 25,
 }: {
   lat: number;
   lng: number;
