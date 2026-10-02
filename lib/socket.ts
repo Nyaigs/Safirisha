@@ -10,21 +10,32 @@ import type {
 
 let socket: Socket | null = null;
 let connectCount = 0;
-let tokenProvider: (() => string | null) | null = null;
+let tokenProvider: (() => string | null | Promise<string | null>) | null = null;
 
-export function setTokenProvider(fn: (() => string | null) | null) {
+export function setTokenProvider(fn: (() => string | null | Promise<string | null>) | null) {
   tokenProvider = fn;
 }
 
-function getToken() {
-  return tokenProvider ? tokenProvider() : null;
+async function resolveToken(): Promise<string> {
+  if (!tokenProvider) return "";
+  try {
+    const token = await tokenProvider();
+    return token ?? "";
+  } catch {
+    return "";
+  }
 }
 
 function createSocket() {
   return io(SOCKET_BASE_URL, {
     transports: ["polling", "websocket"],
     autoConnect: false,
-    auth: { token: getToken() },
+    // Callback form: fires on every (re)connect so the latest token
+    // is always used. Fixes the race where Clerk's async token wasn't
+    // ready when the socket first tried to connect.
+    auth: (cb: (data: { token: string }) => void) => {
+      resolveToken().then((token) => cb({ token }));
+    },
     reconnection: true,
     reconnectionAttempts: Infinity,
     reconnectionDelay: 1000,
@@ -39,7 +50,6 @@ export function getSocket() {
 
 export function connectSocket() {
   const s = getSocket();
-  s.auth = { token: getToken() };
   if (!s.connected) {
     s.connect();
   }
@@ -124,6 +134,5 @@ export function reconnectSocketWithLatestToken() {
 
 export function refreshSocketToken() {
   if (socket && socket.connected) {
-    socket.auth = { token: getToken() };
   }
 }

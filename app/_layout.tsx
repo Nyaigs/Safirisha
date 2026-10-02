@@ -4,7 +4,7 @@ import { Stack } from "expo-router";
 import { useEffect } from "react";
 import {
   clearCachedClerkToken,
-  getBestAccessTokenSync,
+  getBestAccessToken,
   registerClerkTokenGetter,
   setCachedClerkToken,
 } from "../lib/auth-token";
@@ -20,7 +20,7 @@ function ClerkTokenBridge() {
   const logout = useAuthStore((state) => state.logout);
 
   useEffect(() => {
-    setTokenProvider(getBestAccessTokenSync);
+    setTokenProvider(getBestAccessToken);
     setLogoutHandler(logout);
 
     return () => {
