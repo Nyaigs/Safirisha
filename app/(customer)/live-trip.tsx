@@ -159,6 +159,32 @@ export default function LiveTripScreen() {
   const currentStatus = (trip?.status || "SEARCHING") as TripStatus;
   const currentPaymentMethod = trip?.paymentMethod || null;
   const currentPaymentStatus = trip?.paymentStatus || "UNPAID";
+  useEffect(() => {
+    if (!trip?.pickupLat || !trip?.dropoffLat) return;
+    const isEnRoute = ["ACCEPTED", "DRIVER_EN_ROUTE", "ARRIVED_PICKUP"].includes(currentStatus);
+    const origin = isEnRoute
+      ? { lat: driverLocation?.lat ?? trip.pickupLat, lng: driverLocation?.lng ?? trip.pickupLng }
+      : { lat: trip.pickupLat, lng: trip.pickupLng };
+    const destination = isEnRoute
+      ? { lat: trip.pickupLat, lng: trip.pickupLng }
+      : { lat: trip.dropoffLat, lng: trip.dropoffLng };
+
+    if (!Number.isFinite(origin.lat) || !Number.isFinite(destination.lat)) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const route = await maps.getRoute(origin, destination);
+        const polyline = route?.polyline;
+        if (!cancelled && polyline && polyline.length >= 2) {
+          setRouteCoords(polyline);
+        }
+      } catch {
+        /* fallback to straight line */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [trip?.pickupLat, trip?.dropoffLat, currentStatus, driverLocation?.lat, driverLocation?.lng]);
 
   const currentStatusLabel = useMemo(() => formatTripStatus(trip?.status), [trip?.status]);
   const statusHint = useMemo(
@@ -535,32 +561,6 @@ export default function LiveTripScreen() {
   const showPaymentOptions = currentStatus === "DELIVERY_CONFIRMED" && !currentPaymentMethod;
   const showPaymentPendingInfo = currentStatus === "PAYMENT_PENDING";
 
-  useEffect(() => {
-    if (!trip?.pickupLat || !trip?.dropoffLat) return;
-    const isEnRoute = ["ACCEPTED", "DRIVER_EN_ROUTE", "ARRIVED_PICKUP"].includes(currentStatus);
-    const origin = isEnRoute
-      ? { lat: driverLocation?.lat ?? trip.pickupLat, lng: driverLocation?.lng ?? trip.pickupLng }
-      : { lat: trip.pickupLat, lng: trip.pickupLng };
-    const destination = isEnRoute
-      ? { lat: trip.pickupLat, lng: trip.pickupLng }
-      : { lat: trip.dropoffLat, lng: trip.dropoffLng };
-
-    if (!Number.isFinite(origin.lat) || !Number.isFinite(destination.lat)) return;
-
-    let cancelled = false;
-    (async () => {
-      try {
-        const route = await maps.getRoute(origin, destination);
-        const polyline = route?.polyline;
-        if (!cancelled && polyline && polyline.length >= 2) {
-          setRouteCoords(polyline);
-        }
-      } catch {
-        /* fallback to straight line */
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [trip?.pickupLat, trip?.dropoffLat, currentStatus, driverLocation?.lat, driverLocation?.lng]);
 
   const routeLineCoordinates = driverLocation
     ? [
