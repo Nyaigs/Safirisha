@@ -258,6 +258,7 @@ export async function createTripRequest(req: AuthRequest, res: Response) {
       estimatedPrice,
       distanceKm,
       scheduledFor, // NEW: ISO datetime string
+      paymentMethod,
     } = req.body as {
       pickupAddress?: string;
       pickupLat?: number;
@@ -272,6 +273,7 @@ export async function createTripRequest(req: AuthRequest, res: Response) {
       estimatedPrice?: number;
       distanceKm?: number;
       scheduledFor?: string;
+      paymentMethod?: string;
     };
 
     if (
@@ -349,6 +351,7 @@ export async function createTripRequest(req: AuthRequest, res: Response) {
         searchStartedAt: status === RequestStatus.SEARCHING ? new Date() : null,
         expiresAt: status === RequestStatus.SEARCHING ? getExpiryDate() : null,
         paymentStatus: "UNPAID",
+        paymentMethod: paymentMethod === "MPESA" ? "MPESA" : "CASH",
         platformFeePercent: financials.platformFeePercent,
         platformFeeAmount: financials.platformFeeAmount,
         driverNetEarning: financials.driverNetEarning,

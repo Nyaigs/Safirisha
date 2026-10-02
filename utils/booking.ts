@@ -1,5 +1,7 @@
 import { AppLocation, LoadSize, LocationPoint, VehicleId } from "../types";
 
+export type PaymentMethod = "CASH" | "MPESA";
+
 export type BookingStep = "idle" | "pickup" | "dropoff" | "details" | "load" | "vehicle" | "confirm";
 export type DeliveryCategory = "Package" | "Documents" | "Shopping" | "Groceries" | "Electronics" | "Furniture" | "Food" | "Other";
 
@@ -13,6 +15,7 @@ export type BookingDraft = {
   fragile: boolean;
   loadSize: LoadSize | null;
   vehicle: VehicleId | null;
+  paymentMethod: PaymentMethod;
 };
 
 export const INITIAL_BOOKING_DRAFT: BookingDraft = {
@@ -25,6 +28,7 @@ export const INITIAL_BOOKING_DRAFT: BookingDraft = {
   fragile: false,
   loadSize: null,
   vehicle: null,
+  paymentMethod: "CASH",
 };
 
 export function toLocationPoint(location: AppLocation): LocationPoint {
@@ -90,6 +94,7 @@ export type TripRequestDraft = {
   specialNotes: string | null;
   estimatedPrice: number;
   distanceKm: number;
+  paymentMethod: PaymentMethod;
 };
 
 export function buildRequestPayload(
@@ -114,5 +119,6 @@ export function buildRequestPayload(
     specialNotes: draft.notes.trim() || null,
     estimatedPrice,
     distanceKm,
+    paymentMethod: draft.paymentMethod,
   };
 }

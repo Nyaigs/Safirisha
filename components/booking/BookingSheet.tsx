@@ -196,4 +196,41 @@ const styles = StyleSheet.create({
   edit: { alignItems: "center", padding: design.spacing.sm },
   mapActionText: { ...design.typography.label, color: design.colors.brand },
   inlineFooter: { paddingTop: design.spacing.md },
+  paymentRow: {
+    marginTop: design.spacing.sm,
+    marginBottom: design.spacing.sm,
+  },
+  paymentLabel: {
+    ...design.typography.caption,
+    color: design.colors.muted,
+    fontWeight: "600",
+    marginBottom: design.spacing.xs,
+  },
+  paymentOptions: {
+    flexDirection: "row",
+    gap: design.spacing.sm,
+  },
+  paymentOption: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: design.spacing.xs,
+    paddingVertical: design.spacing.sm,
+    borderRadius: design.radius.md,
+    borderWidth: 1,
+    borderColor: design.colors.border,
+    backgroundColor: design.colors.surface,
+  },
+  paymentOptionActive: {
+    backgroundColor: design.colors.ink,
+    borderColor: design.colors.ink,
+  },
+  paymentOptionText: {
+    ...design.typography.label,
+    color: design.colors.ink,
+  },
+  paymentOptionTextActive: {
+    color: design.colors.white,
+  },
 });

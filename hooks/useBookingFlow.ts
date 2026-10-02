@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { getLoadSizeByKey } from "../constants/loadsizes";
 import { VEHICLES } from "../constants/vehicles";
 import { AppLocation, LoadSize, VehicleId } from "../types";
+import type { PaymentMethod } from "../utils/booking";
 import {
   BookingDraft,
   BookingStep,
@@ -29,6 +30,7 @@ export function useBookingFlow() {
   const setFragile = useCallback((fragile: boolean) => setDraft((current) => ({ ...current, fragile })), []);
   const setLoadSize = useCallback((loadSize: LoadSize | null) => setDraft((current) => ({ ...current, loadSize, vehicle: null })), []);
   const setVehicle = useCallback((vehicle: VehicleId | null) => setDraft((current) => ({ ...current, vehicle })), []);
+  const setPaymentMethod = useCallback((paymentMethod: PaymentMethod) => setDraft((current) => ({ ...current, paymentMethod })), []);
 
   const distanceKm = useMemo(() => pickup && dropoff ? distanceBetweenKm(pickup, dropoff) : 0, [pickup, dropoff]);
   const suitableVehicleIds = useMemo(() => {
