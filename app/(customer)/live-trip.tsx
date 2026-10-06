@@ -145,6 +145,7 @@ export default function LiveTripScreen() {
   const fetchTrip = useTripStore((s) => s.fetchTrip);
   const cancelTrip = useTripStore((s) => s.cancelTrip);
   const [routeCoords, setRouteCoords] = useState<{ latitude: number; longitude: number }[]>([]);
+  const [confirmModal, setConfirmModal] = useState<null | "pickup" | "delivery">(null);
   const confirmPickupAction = useTripStore((s) => s.confirmPickup);
   const confirmDeliveryAction = useTripStore((s) => s.confirmDelivery);
   const selectPaymentMethod = useTripStore((s) => s.selectPaymentMethod);
@@ -422,17 +423,26 @@ export default function LiveTripScreen() {
 
   const handleConfirmPickup = () => {
     if (!safeTripId) return;
-    Alert.alert("Confirm pickup", "Confirm only after the driver has received your goods at pickup.", [
-      { text: "Not yet", style: "cancel" },
-      {
-        text: "Confirm pickup",
-        onPress: async () => {
-          await confirmPickupAction(safeTripId);
-          if (useTripStore.getState().error)
-            Alert.alert("Confirmation failed", useTripStore.getState().error || "Could not confirm pickup.");
-        },
-      },
-    ]);
+    setConfirmModal("pickup");
+  };
+
+  const runConfirm = async () => {
+    const kind = confirmModal;
+    setConfirmModal(null);
+    if (!safeTripId || !kind) return;
+    try {
+      if (kind === "pickup") {
+        await confirmPickupAction(safeTripId);
+      } else {
+        await confirmDeliveryAction(safeTripId);
+      }
+      const err = useTripStore.getState().error;
+      if (err) {
+        console.warn("[confirm] failed:", err);
+      }
+    } catch (e) {
+      console.warn("[confirm] error:", e);
+    }
   };
 
   const handleConfirmDelivery = () => {
@@ -513,6 +523,47 @@ export default function LiveTripScreen() {
   if (!safeTripId) {
     return (
       <SafeAreaView style={styles.centerScreen}>
+
+      {/* Confirm modal — works on native + web (Alert.alert is a no-op on web) */}
+      <Modal
+        visible={confirmModal !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setConfirmModal(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>
+              {confirmModal === "pickup" ? "Confirm pickup handover?" : "Confirm delivery received?"}
+            </Text>
+            <Text style={styles.modalBody}>
+              {confirmModal === "pickup"
+                ? "Only confirm after the driver has received your goods at pickup."
+                : "Only confirm after you have received your goods at drop-off."}
+            </Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalCancel]}
+                onPress={() => setConfirmModal(null)}
+                disabled={isSubmitting}
+              >
+                <Text style={styles.modalCancelText}>Not yet</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalPrimary]}
+                onPress={runConfirm}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator color={design.colors.white} />
+                ) : (
+                  <Text style={styles.modalPrimaryText}>Confirm</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
         <Text style={styles.errorTitle}>Missing trip ID</Text>
         <Text style={styles.errorText}>
           We could not open this live trip because the trip ID is missing.
@@ -1318,4 +1369,54 @@ const styles = StyleSheet.create({
   prioritySubtitle: { ...design.typography.body, color: design.colors.muted, marginBottom: design.spacing.md },
   priorityButton: { backgroundColor: design.colors.brand, paddingVertical: 16, borderRadius: design.radius.md, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: design.spacing.sm },
   priorityButtonText: { ...design.typography.label, color: design.colors.white, fontWeight: "800", fontSize: 15 },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: design.spacing.lg,
+  },
+  modalCard: {
+    backgroundColor: design.colors.white,
+    borderRadius: design.radius.lg,
+    padding: design.spacing.lg,
+    width: "100%",
+    maxWidth: 400,
+  },
+  modalTitle: {
+    ...design.typography.title,
+    color: design.colors.ink,
+    marginBottom: design.spacing.xs,
+  },
+  modalBody: {
+    ...design.typography.body,
+    color: design.colors.muted,
+    marginBottom: design.spacing.lg,
+    lineHeight: 20,
+  },
+  modalActions: {
+    flexDirection: "row",
+    gap: design.spacing.sm,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: design.radius.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalCancel: {
+    backgroundColor: design.colors.subtle,
+  },
+  modalCancelText: {
+    ...design.typography.label,
+    color: design.colors.ink,
+  },
+  modalPrimary: {
+    backgroundColor: design.colors.brand,
+  },
+  modalPrimaryText: {
+    ...design.typography.label,
+    color: design.colors.white,
+  },
 });
