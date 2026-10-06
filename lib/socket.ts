@@ -30,11 +30,14 @@ function createSocket() {
   return io(SOCKET_BASE_URL, {
     transports: ["polling", "websocket"],
     autoConnect: false,
-    // Callback form: fires on every (re)connect so the latest token
+    // SAFIRISHA_SOCKET_V2_2026 — Callback form: fires on every (re)connect so the latest token
     // is always used. Fixes the race where Clerk's async token wasn't
     // ready when the socket first tried to connect.
     auth: (cb: (data: { token: string }) => void) => {
-      resolveToken().then((token) => cb({ token }));
+      resolveToken().then((token) => {
+        console.log("[SOCKET] auth handshake — token length:", token?.length ?? 0);
+        cb({ token });
+      });
     },
     reconnection: true,
     reconnectionAttempts: Infinity,
