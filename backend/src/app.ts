@@ -7,6 +7,7 @@ import path from "path";
 import { prisma } from "./lib/prisma";
 import { errorHandler, notFound } from "./middleware/error.middleware";
 import adminRoutes from "./routes/admin.routes";
+import aiRoutes from "./routes/ai.routes";
 import authRoutes from "./routes/auth.routes";
 import driverRoutes from "./routes/driver.routes";
 import notificationRoutes from "./routes/notification.routes";
@@ -64,6 +65,7 @@ app.use("/api/trips", tripRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/ai", aiRoutes);
 
 // DB ping endpoint – keeps Neon awake
 app.get("/api/db-ping", async (_req, res) => {
