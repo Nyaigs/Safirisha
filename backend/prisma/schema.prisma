@@ -217,3 +217,15 @@ model Notification {
   @@index([userId, createdAt])
   @@index([userId, isRead])
 }
+
+
+model ChatMessage {
+  id         String   @id @default(cuid())
+  tripId     String
+  senderId   String
+  senderName String
+  text       String
+  createdAt  DateTime @default(now())
+
+  @@index([tripId, createdAt])
+}

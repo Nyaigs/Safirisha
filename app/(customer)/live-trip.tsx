@@ -10,6 +10,7 @@ import {
   Share,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -139,6 +140,9 @@ export default function LiveTripScreen() {
   const [safetyOpen, setSafetyOpen] = useState(false);
   const [routeCoords, setRouteCoords] = useState<{ latitude: number; longitude: number }[]>([]);
   const [confirmModal, setConfirmModal] = useState<null | "pickup" | "delivery">(null);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [messages, setMessages] = useState<any[]>([]);
+  const [chatInput, setChatInput] = useState("");
 
   const trip = useTripStore((s) => s.currentTrip);
   const driverLocation = useTripStore((s) => s.driverLocation);
@@ -356,6 +360,10 @@ export default function LiveTripScreen() {
     socket.on("disconnect", markDisconnected);
     socket.on("trip_updated", onTripUpdated);
     socket.on("trip_status_updated", onTripStatusUpdated);
+    const onChatMessage = (msg: any) => {
+      if (msg.tripId === safeTripId) setMessages((prev) => [...prev, msg]);
+    };
+    socket.on("chat_message", onChatMessage);
     socket.on("trip_expired", onTripExpired);
 
     void Promise.resolve().then(() => {
@@ -369,6 +377,7 @@ export default function LiveTripScreen() {
       socket.off("disconnect", markDisconnected);
       socket.off("trip_updated", onTripUpdated);
       socket.off("trip_status_updated", onTripStatusUpdated);
+      socket.off("chat_message", onChatMessage);
       socket.off("trip_expired", onTripExpired);
       leaveTripRoom(safeTripId);
     };
@@ -435,6 +444,13 @@ export default function LiveTripScreen() {
       return;
     }
     Alert.alert("M-Pesa test payment complete", "This environment is using the configured M-Pesa simulation. No phone PIN prompt was sent.");
+  };
+
+  const sendChat = () => {
+    if (!chatInput.trim() || !safeTripId) return;
+    const socket = connectSocket();
+    socket.emit("send_chat_message", { tripId: safeTripId, text: chatInput.trim() });
+    setChatInput("");
   };
 
   const openDialer = async () => {
@@ -597,10 +613,10 @@ export default function LiveTripScreen() {
                 ))}
               </View>
               <View style={styles.progressLabels}>
-                <Text style={styles.progressLabel}>Driver en route</Text>
-                <Text style={styles.progressLabel}>Loading cargo</Text>
-                <Text style={styles.progressLabel}>In transit</Text>
-                <Text style={styles.progressLabel}>Offloading</Text>
+                <Text style={styles.progressLabel}>Accepted</Text>
+                <Text style={styles.progressLabel}>Pickup</Text>
+                <Text style={styles.progressLabel}>In Transit</Text>
+                <Text style={styles.progressLabel}>Delivered</Text>
               </View>
             </View>
           )}
@@ -612,9 +628,14 @@ export default function LiveTripScreen() {
                 <Text style={styles.driverName}>{displayDriverName}</Text>
                 <Text style={styles.driverMeta}>{displayVehicleType} • Plate: {displayPlateNumber}</Text>
               </View>
-              <TouchableOpacity style={styles.callButton} onPress={openDialer}>
-                <Ionicons name="call-outline" size={18} color={design.colors.white} />
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity style={styles.callButton} onPress={() => Alert.alert("Chat", "Messaging coming soon!")}>
+                  <Ionicons name="chatbubble-outline" size={18} color={design.colors.white} />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.callButton} onPress={openDialer}>
+                  <Ionicons name="call-outline" size={18} color={design.colors.white} />
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
 
@@ -711,6 +732,34 @@ export default function LiveTripScreen() {
               </TouchableOpacity>
               <TouchableOpacity style={[styles.modalButton, styles.modalPrimary]} onPress={runConfirm} disabled={isSubmitting}>
                 {isSubmitting ? <ActivityIndicator color={design.colors.white} /> : <Text style={styles.modalPrimaryText}>Confirm</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+
+      {/* Chat Modal */}
+      <Modal visible={chatOpen} transparent animationType="slide" onRequestClose={() => setChatOpen(false)}>
+        <View style={styles.safetyBackdrop}>
+          <View style={[styles.safetySheet, { height: '60%' }]}>
+            <View style={styles.safetyHeader}>
+              <Text style={styles.safetyTitle}>Chat with {displayDriverName}</Text>
+              <TouchableOpacity style={styles.safetyClose} onPress={() => setChatOpen(false)}>
+                <Ionicons name="close" size={22} color={design.colors.ink} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView contentContainerStyle={{ paddingBottom: 20 }}>
+              {messages.map((m, i) => (
+                <View key={i} style={{ alignSelf: m.senderId === trip.customerId ? 'flex-end' : 'flex-start', backgroundColor: m.senderId === trip.customerId ? design.colors.brand : design.colors.subtle, padding: 10, borderRadius: 12, marginBottom: 8, maxWidth: '80%' }}>
+                  <Text style={{ color: m.senderId === trip.customerId ? '#fff' : design.colors.ink }}>{m.text}</Text>
+                </View>
+              ))}
+            </ScrollView>
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+              <TextInput style={{ flex: 1, borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 10 }} value={chatInput} onChangeText={setChatInput} placeholder="Type a message..." />
+              <TouchableOpacity style={{ backgroundColor: design.colors.ink, padding: 10, borderRadius: 8, justifyContent: 'center' }} onPress={sendChat}>
+                <Ionicons name="send" size={18} color="#fff" />
               </TouchableOpacity>
             </View>
           </View>

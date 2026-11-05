@@ -176,6 +176,26 @@ export function initSocket(server: HttpServer) {
       socket.leave(`trip:${tripId}`);
     });
 
+
+    socket.on("send_chat_message", async (payload: { tripId: string; text: string }) => {
+      if (!payload.tripId || !payload.text) return;
+      
+      try {
+        const msg = await prisma.chatMessage.create({
+          data: {
+            tripId: payload.tripId,
+            senderId: user.id,
+            senderName: (user as any).fullName || "User",
+            text: payload.text,
+          }
+        });
+        
+        io!.to(`trip:${payload.tripId}`).emit("chat_message", msg);
+      } catch (error) {
+        console.error("Chat send error:", error);
+      }
+    });
+
     socket.on("disconnect", async () => {
       if (user.role === "DRIVER") {
         removeOnlineDriver(user.id, socket.id);

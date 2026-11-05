@@ -1,24 +1,26 @@
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import * as Location from "expo-location";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   Linking,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import * as Location from "expo-location";
 import MapView, { Marker, Polyline } from "../../components/ui/map-view";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { design } from "../../constants/design";
 import { useLayout } from "../../constants/layout";
 import { apiFetch } from "../../lib/api";
-import { connectSocket } from "../../lib/socket";
 import { maps } from "../../lib/maps";
+import { connectSocket } from "../../lib/socket";
 import { useTripStore } from "../../store/trip";
 import {
   DriverLiveLocation,
@@ -32,6 +34,7 @@ import {
   TripUpdatedPayload,
 } from "../../types/trip";
 import { isValidCoordinate, toNumber } from "../../utils/validators";
+
 
 type TripWithAddresses = Trip & {
   pickupAddress?: string;
@@ -154,6 +157,9 @@ export default function ActiveTripScreen() {
   const currentPaymentMethod = trip?.paymentMethod || null;
   const currentPaymentStatus = trip?.paymentStatus || "UNPAID";
   const [routeCoords, setRouteCoords] = useState<{ latitude: number; longitude: number }[]>([]);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [messages, setMessages] = useState<any[]>([]);
+  const [chatInput, setChatInput] = useState("");
   useEffect(() => {
     if (!pickupLat || !dropoffLat) return;
     const isEnRoute = ["ACCEPTED", "DRIVER_EN_ROUTE", "ARRIVED_PICKUP"].includes(currentStatus);
@@ -183,6 +189,13 @@ export default function ActiveTripScreen() {
   const vehicleLabel = getVehicleLabel(vehicleType);
   const statusTone = useMemo(() => getStatusTone(currentStatus), [currentStatus]);
   const progressStep = useMemo(() => getProgressStep(currentStatus), [currentStatus]);
+
+  const sendChat = () => {
+    if (!chatInput.trim() || !tripId) return;
+    const socket = connectSocket();
+    socket.emit("send_chat_message", { tripId, text: chatInput.trim() });
+    setChatInput("");
+  };
 
   const closeFlow = useCallback((title: string, message: string) => {
     if (hasClosedRef.current) return;
@@ -325,6 +338,10 @@ export default function ActiveTripScreen() {
         socket.on("disconnect", markDisconnected);
         socket.on("trip_updated", onTripUpdated);
         socket.on("trip_status_updated", onTripStatusUpdated);
+        const onChatMessage = (msg: any) => {
+          if (msg.tripId === tripId) setMessages((prev) => [...prev, msg]);
+        };
+        socket.on("chat_message", onChatMessage);
         socket.on("trip_expired", onTripExpired);
         socket.on("driver_location_updated", onDriverLocationUpdated);
 
@@ -644,10 +661,14 @@ export default function ActiveTripScreen() {
             <Text style={styles.quickInfoLabel}>Vehicle</Text>
             <Text style={styles.quickInfoValue}>{vehicleLabel}</Text>
           </View>
-          <TouchableOpacity style={styles.callButtonWide} onPress={openDialer}>
-            <Ionicons name="call-outline" size={18} color={design.colors.white} />
-            <Text style={styles.callButtonText}>Call Customer</Text>
-          </TouchableOpacity>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity style={styles.callButton} onPress={() => setChatOpen(true)}>
+              <Ionicons name="chatbubble-outline" size={18} color={design.colors.white} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.callButton} onPress={openDialer}>
+              <Ionicons name="call-outline" size={18} color={design.colors.white} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.card}>
@@ -707,6 +728,15 @@ export default function ActiveTripScreen() {
 }
 
 const styles = StyleSheet.create({
+  callButton: { 
+    width: 44, 
+    height: 44, 
+    borderRadius: 22, 
+    backgroundColor: design.colors.ink, 
+    justifyContent: "center", 
+    alignItems: "center" 
+  },
+
   screen: { flex: 1, backgroundColor: design.colors.surface },
   mapWrap: { position: "relative" },
   map: { flex: 1 },
