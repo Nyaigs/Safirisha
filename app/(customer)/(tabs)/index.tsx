@@ -10,6 +10,7 @@ import { LocationSearchOverlay } from "../../../components/booking/LocationSearc
 import { BottomSheet } from "../../../components/ui/bottom-sheet";
 import { StateMessage } from "../../../components/ui/state-message";
 import { design } from "../../../constants/design";
+import { apiFetch } from "../../../lib/api";
 import { useLayout } from "../../../constants/layout";
 import { useBookingFlow } from "../../../hooks/useBookingFlow";
 import { useCustomerStore } from "../../../store/customer";
@@ -48,6 +49,7 @@ export default function HomeScreen() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [nearbyDrivers, setNearbyDrivers] = useState<{id: string, lat: number, lng: number, vehicleType: string}[]>([]);
   const [searchField, setSearchField] = useState<"pickup" | "dropoff">("dropoff");
   const [initialPlaceQuery, setInitialPlaceQuery] = useState("");
 
@@ -62,6 +64,40 @@ export default function HomeScreen() {
 
   const activeTrip = useCustomerStore((state) => state.activeTrip);
   const fetchActiveTrip = useCustomerStore((state) => state.fetchActiveTrip);
+
+  useEffect(() => {
+    if (!flow.pickup || !flow.selectedVehicle) {
+      setNearbyDrivers([]);
+      return;
+    }
+
+    let isMounted = true;
+    
+    // Capture local variables to satisfy TypeScript's strict null checks
+    const pLat = flow.pickup.latitude;
+    const pLng = flow.pickup.longitude;
+    const vType = flow.selectedVehicle.toUpperCase();
+
+    const fetchNearby = async () => {
+      try {
+        const res = await apiFetch(`/map/nearby-drivers?lat=${pLat}&lng=${pLng}&vehicleType=${vType}`);
+        if (isMounted && res?.drivers) {
+          setNearbyDrivers(res.drivers);
+        }
+      } catch (err) {
+        console.warn("Failed to load nearby drivers", err);
+      }
+    };
+
+    fetchNearby();
+    // Refresh every 15 seconds to simulate real-time movement
+    const interval = setInterval(fetchNearby, 15000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [flow.pickup, flow.selectedVehicle]);
+
   const recentTrips = useCustomerStore((state) => state.recentTrips);
   const unreadCount = useNotificationsStore((s) => s.unreadCount);
   const fetchUnreadCount = useNotificationsStore((s) => s.fetchUnreadCount);
@@ -285,7 +321,24 @@ export default function HomeScreen() {
           {flow.pickup && flow.dropoff && (
             <Polyline coordinates={[flow.pickup, flow.dropoff]} strokeColor={design.colors.brand} strokeWidth={4} />
           )}
-        </MapView>
+  
+        {/* Nearby Available Drivers */}
+        {nearbyDrivers.map((driver) => (
+          <Marker
+            key={driver.id}
+            coordinate={{ latitude: driver.lat, longitude: driver.lng }}
+            anchor={{ x: 0.5, y: 0.5 }}
+          >
+            <View style={{ backgroundColor: design.colors.white, padding: 6, borderRadius: 20, ...design.shadow }}>
+              <MaterialCommunityIcons 
+                name={driver.vehicleType === 'BIKE' ? 'motorbike' : driver.vehicleType === 'TUKTUK' ? 'rickshaw' : driver.vehicleType === 'PICKUP' ? 'truck-cargo-container' : 'truck'} 
+                size={20} 
+                color={design.colors.ink} 
+              />
+            </View>
+          </Marker>
+        ))}
+      </MapView>
 
         <TouchableOpacity
           style={[styles.mapBack, { top: insets.top + design.spacing.sm }]}

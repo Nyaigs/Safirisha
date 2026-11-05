@@ -29,12 +29,7 @@ function FloatingTabBar({ state, navigation }: any) {
               key={route.key}
               activeOpacity={0.7}
               onPress={() => {
-                const event = navigation.emit({
-                  type: "tabPress",
-                  target: route.key,
-                  canPreventDefault: true,
-                });
-                if (!focused && !event.defaultPrevented) {
+                if (!focused) {
                   navigation.navigate(route.name);
                 }
               }}
