@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Redirect, Tabs } from "expo-router";
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 import { design } from "../../constants/design";
 import { useAuthStore } from "../../store/auth";
 
@@ -12,11 +13,12 @@ const TABS = [
   { name: "profile", title: "Profile", icon: "person", iconOutline: "person-outline" },
 ] as const;
 
-function FloatingTabBar({ state, navigation }: any) {
+function FloatingTabBar({ state, descriptors }: { state: any; descriptors: any }) {
   const insets = useSafeAreaInsets();
   const visibleRoutes = state.routes.filter((r: any) =>
     TABS.some((t) => t.name === r.name)
   );
+  const router = useRouter();
   return (
     <View style={[styles.wrapper, { bottom: Math.max(insets.bottom, 16) }]} pointerEvents="box-none">
       <View style={styles.pill}>
@@ -30,7 +32,10 @@ function FloatingTabBar({ state, navigation }: any) {
               activeOpacity={0.7}
               onPress={() => {
                 if (!focused) {
-                  navigation.navigate(route.name);
+                  const routeDescriptor = descriptors[route.key];
+                  if (routeDescriptor?.options?.href) {
+                    router.replace(routeDescriptor.options.href as any);
+                  }
                 }
               }}
               style={styles.tab}

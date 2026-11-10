@@ -11,6 +11,10 @@ import type {
 let socket: Socket | null = null;
 let connectCount = 0;
 let tokenProvider: (() => string | null | Promise<string | null>) | null = null;
+let tokenReadyResolver: (token: string) => void;
+export const tokenReady = new Promise<string>((resolve) => {
+  tokenReadyResolver = resolve;
+});
 
 export function setTokenProvider(fn: (() => string | null | Promise<string | null>) | null) {
   tokenProvider = fn;
@@ -26,17 +30,37 @@ async function resolveToken(): Promise<string> {
   }
 }
 
+// Waits for a NON-EMPTY token, resolves tokenReady only on success
+async function waitForValidToken(maxRetries = 10, delayMs = 500): Promise<string> {
+  for (let i = 0; i < maxRetries; i++) {
+    const token = await resolveToken();
+    if (token && token.length > 0) {
+      tokenReadyResolver(token);
+      return token;
+    }
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
+  // Final attempt
+  const token = await resolveToken();
+  if (token && token.length > 0) {
+    tokenReadyResolver(token);
+    return token;
+  }
+  // No valid token after retries - reject to prevent empty-token auth
+  throw new Error("No valid Clerk token available after retries");
+}
+
 function createSocket() {
   return io(SOCKET_BASE_URL, {
     transports: ["polling", "websocket"],
     autoConnect: false,
-    // SAFIRISHA_SOCKET_V2_2026 — Callback form: fires on every (re)connect so the latest token
-    // is always used. Fixes the race where Clerk's async token wasn't
-    // ready when the socket first tried to connect.
     auth: (cb: (data: { token: string }) => void) => {
-      resolveToken().then((token) => {
+      waitForValidToken().then((token) => {
         console.log("[SOCKET] auth handshake — token length:", token?.length ?? 0);
         cb({ token });
+      }).catch((err) => {
+        console.error("[SOCKET] auth failed:", err);
+        cb({ token: "" }); // Will fail auth, trigger reconnect with fresh attempt
       });
     },
     reconnection: true,
@@ -126,13 +150,19 @@ export function onNewTripCreated(handler: (...args: any[]) => void) {
   return subscribe("new_trip_created", handler);
 }
 
-export function reconnectSocketWithLatestToken() {
+// Reconnect ONLY after obtaining a valid non-empty token
+export async function reconnectSocketWithLatestToken() {
   if (socket) {
     socket.disconnect();
     socket = null;
   }
   connectCount = 0;
-  connectSocket();
+  try {
+    await waitForValidToken();
+    connectSocket();
+  } catch (err) {
+    console.error("[SOCKET] reconnect aborted:", err);
+  }
 }
 
 export function refreshSocketToken() {

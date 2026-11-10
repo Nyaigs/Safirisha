@@ -22,6 +22,7 @@ import { apiFetch } from "../../lib/api";
 import { maps } from "../../lib/maps";
 import { connectSocket } from "../../lib/socket";
 import { useTripStore } from "../../store/trip";
+import { useDriverStore } from "../../store/driver";
 import {
   DriverLiveLocation,
   DriverLocationUpdatedPayload,
@@ -180,7 +181,9 @@ export default function ActiveTripScreen() {
         if (!cancelled && polyline && polyline.length >= 2) {
           setRouteCoords(polyline);
         }
-      } catch { /* fallback */ }
+      } catch {
+        console.warn("[active-trip] Geoapify route fetch failed, using straight line fallback");
+      }
     })();
     return () => { cancelled = true; };
   }, [pickupLat, dropoffLat, currentStatus, driverLocation?.lat, driverLocation?.lng]);
@@ -247,6 +250,35 @@ export default function ActiveTripScreen() {
   const initTrip = useCallback(async () => {
     if (!tripId) return null;
     const store = useTripStore;
+    // Check trip store first
+    let existingTrip = store.getState().currentTrip as TripWithAddresses | null;
+    
+    // Fallback: check driver store (dashboard may have it)
+    if (!existingTrip || existingTrip.id !== tripId) {
+      const driverTrip = useDriverStore.getState().activeTrip as TripWithAddresses | null;
+      if (driverTrip && driverTrip.id === tripId) {
+        existingTrip = driverTrip;
+        // Sync to trip store
+        store.getState().setCurrentTrip(driverTrip);
+      }
+    }
+    if (existingTrip && existingTrip.id === tripId) {
+      // Trip already in store (from dashboard), skip fetch
+      const assignedDriver = existingTrip.assignedDriver;
+      let initialDriverLocation: DriverLiveLocation | null = null;
+      if (assignedDriver && isValidCoordinate(assignedDriver.currentLat) && isValidCoordinate(assignedDriver.currentLng)) {
+        initialDriverLocation = {
+          lat: assignedDriver.currentLat!,
+          lng: assignedDriver.currentLng!,
+          heading: assignedDriver.currentHeading ?? undefined,
+          speed: assignedDriver.currentSpeed ?? undefined,
+          updatedAt: assignedDriver.lastLocationAt ?? new Date().toISOString(),
+        };
+        store.getState().setDriverLocation(initialDriverLocation);
+      }
+      setTimeout(() => fitMapToPoints(existingTrip, initialDriverLocation), 300);
+      return existingTrip;
+    }
     await store.getState().fetchTrip(tripId);
     const fetchedTrip = store.getState().currentTrip as TripWithAddresses | null;
     if (!fetchedTrip) throw new Error(store.getState().error || "Trip not found");
@@ -723,11 +755,73 @@ export default function ActiveTripScreen() {
           <Text style={styles.cardMeta}>Price: KES {Number(trip.estimatedPrice ?? 0).toLocaleString()}</Text>
         </View>
       </ScrollView>
+
+      {/* Chat Modal */}
+      <Modal visible={chatOpen} transparent animationType="slide" onRequestClose={() => setChatOpen(false)}>
+        <View style={styles.safetyBackdrop}>
+          <View style={[styles.safetySheet, { height: '60%' }]}>
+            <View style={styles.safetyHeader}>
+              <Text style={styles.safetyTitle}>Chat with Customer</Text>
+              <TouchableOpacity style={styles.safetyClose} onPress={() => setChatOpen(false)}>
+                <Ionicons name="close" size={22} color={design.colors.ink} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView contentContainerStyle={{ paddingBottom: 20 }}>
+              {messages.map((m, i) => (
+                <View
+                  key={i}
+                  style={{
+                    alignSelf: m.senderId === trip?.assignedDriver?.id ? 'flex-end' : 'flex-start',
+                    backgroundColor: m.senderId === trip?.assignedDriver?.id ? design.colors.brand : design.colors.subtle,
+                    padding: 10,
+                    borderRadius: 12,
+                    marginBottom: 8,
+                    maxWidth: '80%',
+                  }}
+                >
+                  <Text style={{ color: m.senderId === trip?.assignedDriver?.id ? '#fff' : design.colors.ink }}>{m.text}</Text>
+                </View>
+              ))}
+            </ScrollView>
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+              <TextInput style={{ flex: 1, borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 10 }} value={chatInput} onChangeText={setChatInput} placeholder="Type a message..." />
+              <TouchableOpacity style={{ backgroundColor: design.colors.ink, padding: 10, borderRadius: 8, justifyContent: 'center' }} onPress={sendChat}>
+                <Ionicons name="send" size={18} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  safetyBackdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.4)" },
+  safetySheet: {
+    maxHeight: "80%",
+    backgroundColor: design.colors.surface,
+    borderTopLeftRadius: design.radius.xl,
+    borderTopRightRadius: design.radius.xl,
+    paddingHorizontal: design.spacing.lg,
+    paddingTop: design.spacing.lg,
+  },
+  safetyHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: design.spacing.md,
+  },
+  safetyTitle: { color: design.colors.ink, fontSize: 20, fontWeight: "900" },
+  safetyClose: {
+    width: 44,
+    height: 44,
+    borderRadius: design.radius.md,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: design.colors.subtle,
+  },
+
   callButton: { 
     width: 44, 
     height: 44, 

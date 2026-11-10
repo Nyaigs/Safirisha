@@ -150,6 +150,13 @@ export const useTripStore = create<TripState>()((set, get) => ({
     } catch (err: any) {
       set({ isLoading: false, error: err?.message ?? "Failed to fetch trip" });
     }
+    // Safety timeout: if somehow still loading after 15s, force stop
+    setTimeout(() => {
+      const state = get();
+      if (state.isLoading && state.currentTrip?.id === tripId) {
+        set({ isLoading: false });
+      }
+    }, 15000);
   },
 
   cancelTrip: async (tripId) => {

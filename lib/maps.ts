@@ -1,4 +1,6 @@
-export interface PlaceResult {
+import { distanceBetweenKm } from "../utils/booking";
+
+export type PlaceResult = {
   id: string;
   name: string;
   address: string;
@@ -6,13 +8,34 @@ export interface PlaceResult {
   longitude: number;
   category?: string;
   distanceKm?: number;
-}
+};
 
-export interface RouteResult {
+export type RouteResult = {
   polyline: { latitude: number; longitude: number }[];
   distanceKm: number;
   durationMin: number;
-}
+};
+
+type GeoapifyFeature = {
+  properties?: {
+    place_id?: string;
+    name?: string;
+    address_line1?: string;
+    formatted?: string;
+    lat?: number;
+    lon?: number;
+    categories?: string[];
+    distance?: number;
+    time?: number;
+  };
+  geometry?: {
+    coordinates?: any;
+  };
+};
+
+type GeoapifyResponse = {
+  features?: GeoapifyFeature[];
+};
 
 export interface MapsProvider {
   searchPlaces(query: string, bias?: { lat: number; lng: number }): Promise<PlaceResult[]>;
@@ -20,32 +43,8 @@ export interface MapsProvider {
   getRoute(
     origin: { lat: number; lng: number },
     destination: { lat: number; lng: number },
+    options?: { retries?: number; delayMs?: number }
   ): Promise<RouteResult | null>;
-}
-
-type GeoapifyFeature = {
-  geometry?: { coordinates?: unknown };
-  properties?: {
-    place_id?: string | number;
-    formatted?: string;
-    name?: string;
-    address_line1?: string;
-    lat?: unknown;
-    lon?: unknown;
-    categories?: string[];
-    distance?: number;
-    time?: number;
-  };
-};
-
-type GeoapifyResponse = { features?: GeoapifyFeature[] };
-
-function distanceBetweenKm(origin: { lat: number; lng: number }, destination: { lat: number; lng: number }): number {
-  const radians = (value: number) => (value * Math.PI) / 180;
-  const dLat = radians(destination.lat - origin.lat);
-  const dLng = radians(destination.lng - origin.lng);
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(radians(origin.lat)) * Math.cos(radians(destination.lat)) * Math.sin(dLng / 2) ** 2;
-  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 function coordinatesFrom(value: unknown): { latitude: number; longitude: number } | null {
@@ -84,12 +83,17 @@ export class GeoapifyProvider implements MapsProvider {
         longitude,
         category: properties?.categories?.[0],
       };
-      if (bias) result.distanceKm = distanceBetweenKm(bias, { lat: latitude, lng: longitude });
+      if (bias) {
+        result.distanceKm = distanceBetweenKm(
+          { latitude: bias.lat, longitude: bias.lng, address: "" },
+          { latitude, longitude, address }
+        );
+      }
       return [result];
     });
   }
 
-  async reverseGeocode(lat: number, lng: number): Promise<string> {
+  async reverseGeocode(lat: number, lng: number): Promise<string>{
     const key = this.requireKey();
     const params = new URLSearchParams({ lat: String(lat), lon: String(lng), apiKey: key });
     const response = await fetch(`https://api.geoapify.com/v1/geocode/reverse?${params.toString()}`);
@@ -98,29 +102,70 @@ export class GeoapifyProvider implements MapsProvider {
     return data.features?.[0]?.properties?.formatted || "Pinned location";
   }
 
-  async getRoute(origin: { lat: number; lng: number }, destination: { lat: number; lng: number }): Promise<RouteResult | null> {
+  async getRoute(
+    origin: { lat: number; lng: number }, 
+    destination: { lat: number; lng: number },
+    options: { retries?: number; delayMs?: number } = {}
+  ): Promise<RouteResult | null> {
     const key = this.requireKey();
-    const params = new URLSearchParams({
-      waypoints: `${origin.lat},${origin.lng}|${destination.lat},${destination.lng}`,
-      mode: "drive",
-      apiKey: key,
-    });
-    const response = await fetch(`https://api.geoapify.com/v1/routing?${params.toString()}`);
-    if (!response.ok) throw new Error(`Route lookup failed (${response.status}). Please retry.`);
-    const data = await response.json() as GeoapifyResponse;
-    const feature = data.features?.[0];
-    const rawCoordinates = feature?.geometry?.coordinates;
-    if (!Array.isArray(rawCoordinates)) return null;
-    const polyline = rawCoordinates.flatMap((coordinate) => {
-      const point = coordinatesFrom(coordinate);
-      return point ? [point] : [];
-    });
-    if (polyline.length < 2) return null;
-    return {
-      polyline,
-      distanceKm: Number(feature?.properties?.distance ?? 0) / 1000,
-      durationMin: Number(feature?.properties?.time ?? 0) / 60,
-    };
+    const coords = [origin.lat, origin.lng, destination.lat, destination.lng];
+    
+    if (!coords.every(c => Number.isFinite(c) && Math.abs(c) <= 180)) {
+      console.warn("[maps.getRoute] Invalid coordinates:", { origin, destination });
+      return null;
+    }
+
+    const { retries = 2, delayMs = 800 } = options;
+    let lastError: Error | null = null;
+    
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const params = new URLSearchParams({
+          waypoints: `${origin.lat},${origin.lng}|${destination.lat},${destination.lng}`,
+          mode: "drive",
+          apiKey: key,
+        });
+        const response = await fetch(`https://api.geoapify.com/v1/routing?${params.toString()}`);
+        
+        if (!response.ok) {
+          throw new Error(`Route lookup failed (${response.status}). Please retry.`);
+        }
+        
+        const data = await response.json() as GeoapifyResponse;
+        const feature = data.features?.[0];
+        const rawCoordinates = feature?.geometry?.coordinates;
+        
+        if (!Array.isArray(rawCoordinates)) {
+          throw new Error("No route geometry in response");
+        }
+        
+        // Geoapify returns a MultiLineString array: [[[lng, lat], ...]]
+        const lineString = rawCoordinates[0]; 
+        const polyline = lineString.flatMap((coordinate: any) => {
+          const point = coordinatesFrom(coordinate);
+          return point ? [point] : [];
+        });
+        
+        if (polyline.length < 2) {
+          throw new Error("Route has too few points");
+        }
+        
+        return {
+          polyline,
+          distanceKm: Number(feature?.properties?.distance ?? 0) / 1000,
+          durationMin: Number(feature?.properties?.time ?? 0) / 60,
+        };
+      } catch (error: any) {
+        lastError = error;
+        console.warn(`[maps.getRoute] Attempt ${attempt + 1}/${retries + 1} failed:`, error.message);
+        if (attempt < retries) {
+          await new Promise(r => setTimeout(r, delayMs * (attempt + 1)));
+        }
+      }
+    }
+    
+    console.error("[maps.getRoute] All retries exhausted:", lastError);
+    return null;
   }
 }
 
@@ -141,12 +186,9 @@ export class GoogleProvider implements MapsProvider {
     throw this.unavailable();
   }
 
-  async getRoute(_origin: { lat: number; lng: number }, _destination: { lat: number; lng: number }): Promise<RouteResult | null> {
+  async getRoute(_origin: { lat: number; lng: number }, _destination: { lat: number; lng: number }, _options?: { retries?: number; delayMs?: number }): Promise<RouteResult | null> {
     throw this.unavailable();
   }
 }
 
-const selectedProvider = process.env.EXPO_PUBLIC_MAPS_PROVIDER?.trim().toLowerCase();
-export const maps: MapsProvider = selectedProvider === "google"
-  ? new GoogleProvider()
-  : new GeoapifyProvider();
+export const maps: MapsProvider = new GeoapifyProvider();

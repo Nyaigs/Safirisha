@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 import { design } from "../../../constants/design";
 import { useUIStore } from "../../../store/ui";
 
@@ -11,9 +12,10 @@ const TABS = [
   { name: "account", title: "Account", icon: "person", iconOutline: "person-outline" },
 ] as const;
 
-function FloatingTabBar({ state, navigation }: any) {
+function FloatingTabBar({ state, descriptors }: { state: any; descriptors: any }) {
   const insets = useSafeAreaInsets();
   const sheetOpen = useUIStore((s) => s.sheetOpen);
+  const router = useRouter();
   if (sheetOpen) return null;
   return (
     <View style={[styles.wrapper, { bottom: Math.max(insets.bottom, 16) }]} pointerEvents="box-none">
@@ -26,13 +28,11 @@ function FloatingTabBar({ state, navigation }: any) {
               key={route.key}
               activeOpacity={0.7}
               onPress={() => {
-                const event = navigation.emit({
-                  type: "tabPress",
-                  target: route.key,
-                  canPreventDefault: true,
-                });
-                if (!focused && !event.defaultPrevented) {
-                  navigation.navigate(route.name);
+                if (!focused) {
+                  const routeDescriptor = descriptors[route.key];
+                  if (routeDescriptor?.options?.href) {
+                    router.replace(routeDescriptor.options.href as any);
+                  }
                 }
               }}
               style={styles.tab}

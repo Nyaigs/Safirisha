@@ -188,7 +188,7 @@ export default function LiveTripScreen() {
           setRouteCoords(polyline);
         }
       } catch {
-        /* fallback to straight line */
+        console.warn("[live-trip] Geoapify route fetch failed, using straight line fallback");
       }
     })();
     return () => { cancelled = true; };
@@ -341,12 +341,15 @@ export default function LiveTripScreen() {
       if (!isMounted || payload.tripId !== safeTripId) return;
       const currentTrip = useTripStore.getState().currentTrip;
       if (currentTrip) {
-        useTripStore.getState().setCurrentTrip({
-          ...currentTrip,
-          status: payload.status as Trip["status"],
-          paymentMethod: payload.paymentMethod !== undefined ? payload.paymentMethod : currentTrip.paymentMethod,
-          paymentStatus: payload.paymentStatus !== undefined ? payload.paymentStatus : currentTrip.paymentStatus,
-        } as Trip);
+        // Only apply if status actually changed to avoid overwriting full trip from API response
+        if (payload.status !== currentTrip.status) {
+          useTripStore.getState().setCurrentTrip({
+            ...currentTrip,
+            status: payload.status as Trip["status"],
+            paymentMethod: payload.paymentMethod !== undefined ? payload.paymentMethod : currentTrip.paymentMethod,
+            paymentStatus: payload.paymentStatus !== undefined ? payload.paymentStatus : currentTrip.paymentStatus,
+          } as Trip);
+        }
       }
     };
 
@@ -629,7 +632,7 @@ export default function LiveTripScreen() {
                 <Text style={styles.driverMeta}>{displayVehicleType} • Plate: {displayPlateNumber}</Text>
               </View>
               <View style={{ flexDirection: 'row', gap: 8 }}>
-                <TouchableOpacity style={styles.callButton} onPress={() => Alert.alert("Chat", "Messaging coming soon!")}>
+                <TouchableOpacity style={styles.callButton} onPress={() => setChatOpen(true)}>
                   <Ionicons name="chatbubble-outline" size={18} color={design.colors.white} />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.callButton} onPress={openDialer}>

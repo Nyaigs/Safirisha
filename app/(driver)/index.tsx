@@ -19,6 +19,7 @@ import { design } from "../../constants/design";
 import { apiFetch } from "../../lib/api";
 import { connectSocket, onDriverAvailabilityUpdated } from "../../lib/socket";
 import { useDriverStore } from "../../store/driver";
+import { useTripStore } from "../../store/trip";
 import type { Trip } from "../../types/trip";
 
 function getVehicleIcon(vehicle?: string | null) {
@@ -93,6 +94,7 @@ export default function DriverDashboard() {
     const socket = connectSocket();
     const handler = (payload: { trip?: Trip }) => {
       if (payload?.trip) setActiveTrip(payload.trip);
+      if (payload?.trip) useTripStore.getState().setCurrentTrip(payload.trip);
     };
     socket.on("trip_updated", handler);
     return () => { socket.off("trip_updated", handler); };
@@ -214,6 +216,10 @@ export default function DriverDashboard() {
     if (isToggling) return;
     try {
       if (isOnline) {
+        if (activeTrip !== null) {
+          Alert.alert("Cannot go offline", "Complete or cancel your active trip first.");
+          return;
+        }
         await goOffline();
         stopLocationTracking();
       } else {
@@ -231,7 +237,7 @@ export default function DriverDashboard() {
       const message = err instanceof Error ? err.message : "Could not change availability";
       Alert.alert("Toggle failed", message);
     }
-  }, [isOnline, isToggling, goOnline, goOffline, startLocationTracking, stopLocationTracking]);
+  }, [isOnline, isToggling, activeTrip, goOnline, goOffline, startLocationTracking, stopLocationTracking]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -340,7 +346,7 @@ export default function DriverDashboard() {
             pressed && styles.togglePressed,
           ]}
           onPress={handleToggle}
-          disabled={isToggling}
+          disabled={isToggling || activeTrip !== null}
         >
           {isToggling ? (
             <ActivityIndicator color={design.colors.white} size="small" />
