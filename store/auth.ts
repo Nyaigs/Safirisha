@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
-import { disconnectSocket, refreshSocketToken } from "../lib/socket";
+import { disconnectSocket } from "../lib/socket";
 import { setLegacyToken } from "../lib/auth-token";
 
 export type DriverProfile = {
@@ -59,7 +59,7 @@ login: (user, token = null, authMode = "legacy") => {
         if (authMode === "legacy") {
           setLegacyToken(token);
         }
-        refreshSocketToken();
+        // refreshSocketToken removed;
       },
 
       logout: () => {

@@ -29,10 +29,9 @@ function FloatingTabBar({ state, descriptors }: { state: any; descriptors: any }
               activeOpacity={0.7}
               onPress={() => {
                 if (!focused) {
-                  const routeDescriptor = descriptors[route.key];
-                  if (routeDescriptor?.options?.href) {
-                    router.replace(routeDescriptor.options.href as any);
-                  }
+                  if (route.name === "index") router.replace("/(customer)/(tabs)");
+                  else if (route.name === "activity") router.replace("/(customer)/(tabs)/activity");
+                  else if (route.name === "account") router.replace("/(customer)/(tabs)/account");
                 }
               }}
               style={styles.tab}

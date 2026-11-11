@@ -17,6 +17,7 @@ type SocketUser = {
 };
 
 let io: Server | null = null;
+const chatRateLimits = new Map<string, { count: number, timestamp: number }>();
 
 /**
  * Live in-memory registry of ONLINE drivers with reference counting for multi-tab support
@@ -179,6 +180,33 @@ export function initSocket(server: HttpServer) {
 
     socket.on("send_chat_message", async (payload: { tripId: string; text: string }) => {
       if (!payload.tripId || !payload.text) return;
+
+      // Rate limit: max 20 messages per minute
+      const now = Date.now();
+      const limit = chatRateLimits.get(user.id) || { count: 0, timestamp: now };
+      if (now - limit.timestamp > 60000) {
+        limit.count = 1;
+        limit.timestamp = now;
+      } else {
+        limit.count++;
+      }
+      chatRateLimits.set(user.id, limit);
+
+      if (limit.count > 20) {
+        socket.emit("chat_error", { message: "Too many messages. Please slow down." });
+        return;
+      }
+
+      // Block chat if trip is over
+      const trip = await prisma.transportRequest.findUnique({
+        where: { id: payload.tripId },
+        select: { status: true }
+      });
+      
+      if (!trip || ["COMPLETED", "DELIVERED", "CANCELLED"].includes(trip.status)) {
+        socket.emit("chat_error", { message: "This trip has ended. Chat is disabled." });
+        return;
+      }
       
       try {
         const msg = await prisma.chatMessage.create({

@@ -32,10 +32,10 @@ function FloatingTabBar({ state, descriptors }: { state: any; descriptors: any }
               activeOpacity={0.7}
               onPress={() => {
                 if (!focused) {
-                  const routeDescriptor = descriptors[route.key];
-                  if (routeDescriptor?.options?.href) {
-                    router.replace(routeDescriptor.options.href as any);
-                  }
+                  if (route.name === "index") router.replace("/(driver)");
+                  else if (route.name === "jobs") router.replace("/(driver)/jobs");
+                  else if (route.name === "earnings") router.replace("/(driver)/earnings");
+                  else if (route.name === "profile") router.replace("/(driver)/profile");
                 }
               }}
               style={styles.tab}

@@ -693,14 +693,16 @@ export default function ActiveTripScreen() {
             <Text style={styles.quickInfoLabel}>Vehicle</Text>
             <Text style={styles.quickInfoValue}>{vehicleLabel}</Text>
           </View>
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-            <TouchableOpacity style={styles.callButton} onPress={() => setChatOpen(true)}>
-              <Ionicons name="chatbubble-outline" size={18} color={design.colors.white} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.callButton} onPress={openDialer}>
-              <Ionicons name="call-outline" size={18} color={design.colors.white} />
-            </TouchableOpacity>
-          </View>
+                    {!["COMPLETED", "DELIVERED", "CANCELLED"].includes(currentStatus) && (
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity style={styles.callButton} onPress={() => setChatOpen(true)}>
+                <Ionicons name="chatbubble-outline" size={18} color={design.colors.white} />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.callButton} onPress={openDialer}>
+                <Ionicons name="call-outline" size={18} color={design.colors.white} />
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         <View style={styles.card}>

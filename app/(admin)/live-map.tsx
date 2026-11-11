@@ -2,24 +2,24 @@ import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import MapView, { Marker } from "../../components/ui/map-view";
 import { apiFetch } from "../../lib/api";
-import { subscribeToDriverLocationUpdated } from "../../lib/socket";
+import { onDriverLocationUpdated } from "../../lib/socket";
 
 type LiveDriver = {
   id: string;
   name: string;
-  currentLat: number;
-  currentLng: number;
+  currentLat?: number | null;
+  currentLng?: number | null;
   availability?: string | null;
   isActive?: boolean;
   vehicleType?: string | null;
   plateNumber?: string | null;
 };
 
-type DriverLocationPayload = {
+type DriverLocationUpdatedPayload = {
   id: string;
   name?: string;
-  currentLat: number;
-  currentLng: number;
+  currentLat?: number | null;
+  currentLng?: number | null;
   availability?: string;
   vehicleType?: string;
   plateNumber?: string;
@@ -56,8 +56,8 @@ export default function AdminLiveMapScreen() {
 
     fetchDrivers();
 
-    const unsubscribe = subscribeToDriverLocationUpdated(
-      (payload: DriverLocationPayload) => {
+    const unsubscribe = onDriverLocationUpdated(
+      (payload: any) => { // Type adjusted to match socket emit
         const lat =
           typeof payload.currentLat === "number" ? payload.currentLat : null;
         const lng =
@@ -135,8 +135,8 @@ export default function AdminLiveMapScreen() {
           <Marker
             key={driver.id}
             coordinate={{
-              latitude: driver.currentLat,
-              longitude: driver.currentLng,
+              latitude: Number(driver.currentLat),
+              longitude: Number(driver.currentLng),
             }}
             title={driver.name}
             description={`${driver.vehicleType || "Vehicle"} • ${

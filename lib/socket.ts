@@ -11,10 +11,6 @@ import type {
 let socket: Socket | null = null;
 let connectCount = 0;
 let tokenProvider: (() => string | null | Promise<string | null>) | null = null;
-let tokenReadyResolver: (token: string) => void;
-export const tokenReady = new Promise<string>((resolve) => {
-  tokenReadyResolver = resolve;
-});
 
 export function setTokenProvider(fn: (() => string | null | Promise<string | null>) | null) {
   tokenProvider = fn;
@@ -30,24 +26,13 @@ async function resolveToken(): Promise<string> {
   }
 }
 
-// Waits for a NON-EMPTY token, resolves tokenReady only on success
-async function waitForValidToken(maxRetries = 10, delayMs = 500): Promise<string> {
+async function waitForValidToken(maxRetries = 5, delayMs = 500): Promise<string | null> {
   for (let i = 0; i < maxRetries; i++) {
     const token = await resolveToken();
-    if (token && token.length > 0) {
-      tokenReadyResolver(token);
-      return token;
-    }
+    if (token && token.length > 0) return token;
     await new Promise((r) => setTimeout(r, delayMs));
   }
-  // Final attempt
-  const token = await resolveToken();
-  if (token && token.length > 0) {
-    tokenReadyResolver(token);
-    return token;
-  }
-  // No valid token after retries - reject to prevent empty-token auth
-  throw new Error("No valid Clerk token available after retries");
+  return null;
 }
 
 function createSocket() {
@@ -56,11 +41,13 @@ function createSocket() {
     autoConnect: false,
     auth: (cb: (data: { token: string }) => void) => {
       waitForValidToken().then((token) => {
-        console.log("[SOCKET] auth handshake — token length:", token?.length ?? 0);
-        cb({ token });
-      }).catch((err) => {
-        console.error("[SOCKET] auth failed:", err);
-        cb({ token: "" }); // Will fail auth, trigger reconnect with fresh attempt
+        if (token) {
+          console.log("[SOCKET] auth handshake — token length:", token.length);
+          cb({ token });
+        } else {
+          console.error("[SOCKET] auth failed — no token available");
+          // Do not call cb() with empty token, let it timeout and retry
+        }
       });
     },
     reconnection: true,
@@ -77,9 +64,7 @@ export function getSocket() {
 
 export function connectSocket() {
   const s = getSocket();
-  if (!s.connected) {
-    s.connect();
-  }
+  if (!s.connected) s.connect();
   connectCount++;
   return s;
 }
@@ -108,18 +93,12 @@ export function leaveTripRoom(tripId: string) {
   if (s.connected) s.emit("leave_trip_room", tripId);
 }
 
-export function subscribeToDriverLocationUpdated(handler: (payload: any) => void) {
+export function onDriverLocationUpdated(handler: (payload: DriverLocationUpdatedPayload) => void) {
   return subscribe("driver_location_updated", handler);
 }
 
-export function emitDriverOnline() {
-  const s = connectSocket();
-  s.emit("driver:online");
-}
-
-export function emitDriverOffline() {
-  const s = getSocket();
-  if (s.connected) s.emit("driver:offline");
+export function onDriverAvailabilityUpdated(handler: (payload: any) => void) {
+  return subscribe("driver_availability_updated", handler);
 }
 
 export function onTripAccepted(handler: (payload: TripAcceptedPayload) => void) {
@@ -138,34 +117,15 @@ export function onTripExpired(handler: (payload: TripExpiredPayload) => void) {
   return subscribe("trip_expired", handler);
 }
 
-export function onDriverLocationUpdated(handler: (payload: DriverLocationUpdatedPayload) => void) {
-  return subscribe("driver_location_updated", handler);
-}
-
-export function onDriverAvailabilityUpdated(handler: (payload: { driverId: string; availability: string }) => void) {
-  return subscribe("driver_availability_updated", handler);
-}
-
 export function onNewTripCreated(handler: (...args: any[]) => void) {
   return subscribe("new_trip_created", handler);
 }
 
-// Reconnect ONLY after obtaining a valid non-empty token
 export async function reconnectSocketWithLatestToken() {
   if (socket) {
     socket.disconnect();
     socket = null;
   }
   connectCount = 0;
-  try {
-    await waitForValidToken();
-    connectSocket();
-  } catch (err) {
-    console.error("[SOCKET] reconnect aborted:", err);
-  }
-}
-
-export function refreshSocketToken() {
-  if (socket && socket.connected) {
-  }
+  connectSocket();
 }

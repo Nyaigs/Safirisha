@@ -19,10 +19,33 @@ import {
 } from "../controllers/trip.controller";
 import { authenticate } from "../middleware/auth.middleware";
 import { authorizeRoles } from "../middleware/role.middleware";
+import { validate } from "../middleware/zod.middleware";
+import { z } from "zod";
 
 const router = Router();
 
-router.post("/", authenticate, authorizeRoles("CUSTOMER"), createTripRequest);
+const createTripSchema = z.object({
+  body: z.object({
+    pickupAddress: z.string().min(1),
+    pickupLat: z.number().min(-90).max(90),
+    pickupLng: z.number().min(-180).max(180),
+    dropoffAddress: z.string().min(1),
+    dropoffLat: z.number().min(-90).max(90),
+    dropoffLng: z.number().min(-180).max(180),
+    vehicleType: z.string().min(1),
+    loadSize: z.string().min(1),
+    estimatedPrice: z.number().positive(),
+    distanceKm: z.number().positive(),
+    loadDescription: z.string().optional().nullable(),
+    specialNotes: z.string().optional().nullable(),
+    scheduledFor: z.string().datetime().optional().nullable(),
+    paymentMethod: z.enum(["CASH", "MPESA"]).optional().nullable(),
+  }),
+});
+
+
+
+router.post("/", authenticate, authorizeRoles("CUSTOMER"), validate(createTripSchema), createTripRequest);
 
 router.get("/my-trips", authenticate, authorizeRoles("CUSTOMER"), getMyTrips);
 

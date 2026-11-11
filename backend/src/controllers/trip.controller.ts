@@ -151,6 +151,28 @@ const SEARCHABLE_TRIP_STATUSES: RequestStatus[] = [
   RequestStatus.SEARCHING_DRIVER,
 ];
 
+
+function sanitizeTripPII(trip: any, requesterRole: string) {
+  if (!trip) return trip;
+  if (requesterRole === "ADMIN") return trip;
+  const isActiveTrip = [
+    "ACCEPTED", "DRIVER_ASSIGNED", "DRIVER_EN_ROUTE", 
+    "ARRIVED_PICKUP", "PICKUP_CONFIRMED", "IN_TRANSIT", 
+    "ARRIVED_DROPOFF", "DELIVERY_CONFIRMED", "PAYMENT_PENDING"
+  ].includes(trip.status);
+  if (!isActiveTrip) {
+    if (trip.customer) {
+      delete trip.customer.phone;
+      delete trip.customer.email;
+    }
+    if (trip.assignedDriver?.user) {
+      delete trip.assignedDriver.user.phone;
+      delete trip.assignedDriver.user.email;
+    }
+  }
+  return trip;
+}
+
 function buildTripInclude() {
   return {
     customer: {
@@ -495,7 +517,7 @@ export async function getMyDriverActiveTrip(req: AuthRequest, res: Response) {
       include: buildTripInclude(),
     });
 
-    return res.json({ trip: trip ?? null });
+    return res.json({ trip: sanitizeTripPII(trip, req.user?.role || "CUSTOMER") });
   } catch (error) {
     console.error("getMyDriverActiveTrip error:", error);
     return res.status(500).json({ message: "Server error" });
@@ -530,7 +552,7 @@ export async function getTripById(req: AuthRequest, res: Response) {
       return res.status(403).json({ message: "Forbidden" });
     }
 
-    return res.json({ trip });
+    return res.json({ trip: sanitizeTripPII(trip, req.user?.role || "CUSTOMER") });
   } catch (error) {
     console.error("getTripById error:", error);
     return res.status(500).json({ message: "Server error" });
@@ -1171,7 +1193,7 @@ export async function getMyCustomerActiveTrip(req: AuthRequest, res: Response) {
       include: buildTripInclude(),
     });
 
-    return res.json({ trip: trip ?? null });
+    return res.json({ trip: sanitizeTripPII(trip, req.user?.role || "CUSTOMER") });
   } catch (error) {
     console.error("getMyCustomerActiveTrip error:", error);
     return res.status(500).json({ message: "Server error" });
