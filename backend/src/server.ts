@@ -1,4 +1,5 @@
 import "dotenv/config";
+import fs from "fs";
 import http from "http";
 import cron from "node-cron";
 import app from "./app";
@@ -65,6 +66,16 @@ async function startServer() {
       } else {
         console.error("Trip worker failed:", error);
       }
+    }
+  });
+
+
+  // Ensure upload directories exist (required for Render)
+  const uploadDirs = ["uploads/vehicles", "uploads/ownership", "uploads/misc"];
+  uploadDirs.forEach(dir => {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+      console.log(`Created directory: ${dir}`);
     }
   });
 
