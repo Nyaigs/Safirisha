@@ -52,6 +52,7 @@ router.patch(
   upload.fields([
     { name: "vehicleImage", maxCount: 1 },
     { name: "ownershipProof", maxCount: 1 },
+    { name: "licenseImage", maxCount: 1 },
   ]),
   updateDriverKyc,
 );

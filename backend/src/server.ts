@@ -71,7 +71,7 @@ async function startServer() {
 
 
   // Ensure upload directories exist (required for Render)
-  const uploadDirs = ["uploads/vehicles", "uploads/ownership", "uploads/misc"];
+  const uploadDirs = ["uploads/vehicles", "uploads/ownership", "uploads/licenses", "uploads/misc"];
   uploadDirs.forEach(dir => {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });

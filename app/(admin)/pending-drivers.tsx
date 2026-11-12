@@ -9,6 +9,7 @@ type PendingDriver = {
   vehicleType: string;
   vehicleImageUrl?: string;
   ownershipProofUrl?: string;
+  licenseImageUrl?: string;
   approvalStatus: "PENDING" | "APPROVED" | "REJECTED";
   availability: "OFFLINE" | "ONLINE" | "BUSY";
   createdAt: string;
@@ -235,6 +236,15 @@ export default function PendingDriversScreen() {
                   <Text style={styles.kycImageLabel}>Ownership Proof</Text>
                   {item.ownershipProofUrl ? (
                     <Image source={{ uri: `${process.env.EXPO_PUBLIC_API_BASE_URL?.replace('/api', '')}${item.ownershipProofUrl}` }} style={styles.kycImage} />
+                  ) : (
+                    <Text style={styles.kycNoImage}>No image uploaded</Text>
+                  )}
+                </View>
+                
+                <View style={styles.kycImageBox}>
+                  <Text style={styles.kycImageLabel}>Driver License</Text>
+                  {item.licenseImageUrl ? (
+                    <Image source={{ uri: `${process.env.EXPO_PUBLIC_API_BASE_URL?.replace('/api', '')}${item.licenseImageUrl}` }} style={styles.kycImage} />
                   ) : (
                     <Text style={styles.kycNoImage}>No image uploaded</Text>
                   )}

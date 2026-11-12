@@ -381,6 +381,7 @@ export async function updateDriverKyc(req: AuthRequest, res: Response) {
       vehicleImageUrl,
       ownershipProofUrl,
       complianceCertificateUrl,
+      licenseImageUrl,
     } = req.body;
 
     const userId = req.user?.id;
@@ -392,12 +393,16 @@ export async function updateDriverKyc(req: AuthRequest, res: Response) {
     const files = req.files as Record<string, Express.Multer.File[]> | undefined;
     let finalVehicleImageUrl = vehicleImageUrl ?? driver.vehicleImageUrl;
     let finalOwnershipProofUrl = ownershipProofUrl ?? driver.ownershipProofUrl;
+    let finalLicenseImageUrl = licenseImageUrl ?? driver.licenseImageUrl;
 
     if (files?.vehicleImage?.[0]) {
       finalVehicleImageUrl = `/uploads/vehicles/${files.vehicleImage[0].filename}`;
     }
     if (files?.ownershipProof?.[0]) {
       finalOwnershipProofUrl = `/uploads/ownership/${files.ownershipProof[0].filename}`;
+    }
+    if (files?.licenseImage?.[0]) {
+      finalLicenseImageUrl = `/uploads/licenses/${files.licenseImage[0].filename}`;
     }
 
     const updated = await prisma.driverProfile.update({
@@ -408,6 +413,7 @@ export async function updateDriverKyc(req: AuthRequest, res: Response) {
         driverLicenseNumber: driverLicenseNumber ?? driver.driverLicenseNumber,
         vehicleImageUrl: finalVehicleImageUrl,
         ownershipProofUrl: finalOwnershipProofUrl,
+        licenseImageUrl: finalLicenseImageUrl,
         complianceCertificateUrl: complianceCertificateUrl ?? driver.complianceCertificateUrl,
         kycSubmittedAt: new Date(),
       },

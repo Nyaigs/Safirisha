@@ -44,6 +44,7 @@ model DriverProfile {
   vehicleImageUrl          String?
   ownershipProofUrl        String?
   driverLicenseNumber      String?
+  licenseImageUrl          String?
   complianceCertificateUrl String?
   kycSubmittedAt           DateTime?
   approvalStatus           DriverApprovalStatus    @default(PENDING)

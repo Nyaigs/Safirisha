@@ -36,9 +36,8 @@ export default function DriverKycScreen() {
   const [vehicleType, setVehicleType] =
     useState<(typeof VEHICLE_TYPES)[number]>("PICKUP");
   const [vehicleImage, setVehicleImage] = useState<PickedImage | null>(null);
-  const [ownershipProof, setOwnershipProof] = useState<PickedImage | null>(
-    null,
-  );
+  const [ownershipProof, setOwnershipProof] = useState<PickedImage | null>(null);
+  const [licenseImage, setLicenseImage] = useState<PickedImage | null>(null);
   const [loading, setLoading] = useState(false);
 
   const pickImage = async (
@@ -93,6 +92,10 @@ export default function DriverKycScreen() {
       Alert.alert("Missing ownership proof", "Please upload ownership proof.");
       return false;
     }
+    if (!licenseImage) {
+      Alert.alert("Missing license image", "Please upload your driving license.");
+      return false;
+    }
 
     return true;
   };
@@ -117,6 +120,12 @@ export default function DriverKycScreen() {
         uri: ownershipProof!.uri,
         name: ownershipProof!.name || `ownership-${Date.now()}.jpg`,
         type: ownershipProof!.type || "image/jpeg",
+      } as any);
+
+      formData.append("licenseImage", {
+        uri: licenseImage!.uri,
+        name: licenseImage!.name || `license-${Date.now()}.jpg`,
+        type: licenseImage!.type || "image/jpeg",
       } as any);
 
       await apiFetch("/drivers/me/kyc", {
@@ -241,7 +250,7 @@ export default function DriverKycScreen() {
             pickImage(setVehicleImage, "vehicle image"),
           )}
 
-          {renderImagePicker("Ownership Proof", ownershipProof, () =>
+          {renderImagePicker("Driver License", licenseImage, () =>
             pickImage(setOwnershipProof, "ownership proof"),
           )}
 
