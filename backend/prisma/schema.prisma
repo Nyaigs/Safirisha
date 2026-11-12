@@ -20,6 +20,7 @@ model User {
   isActive                   Boolean            @default(true)
   suspendedAt                DateTime?
   suspensionReason           String?
+  rejectionReason            String?
   username                   String?            @unique
   isSuperAdmin               Boolean            @default(false)
   passwordResetCode          String?

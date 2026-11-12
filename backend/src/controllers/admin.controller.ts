@@ -530,8 +530,9 @@ export async function getPendingDrivers(req: AuthRequest, res: Response) {
 export async function updateDriverApproval(req: AuthRequest, res: Response) {
   try {
     const driverId = String(req.params.driverId);
-    const { approvalStatus } = req.body as {
+    const { approvalStatus, rejectionReason } = req.body as {
       approvalStatus?: "APPROVED" | "REJECTED";
+      rejectionReason?: string;
     };
 
     if (!approvalStatus || !["APPROVED", "REJECTED"].includes(approvalStatus)) {
@@ -559,6 +560,7 @@ export async function updateDriverApproval(req: AuthRequest, res: Response) {
       data: {
         approvalStatus,
         availability: "OFFLINE",
+        rejectionReason: approvalStatus === "REJECTED" ? (rejectionReason || "No reason provided") : null,
       },
       include: { user: true },
     });
