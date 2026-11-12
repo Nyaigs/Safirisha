@@ -43,8 +43,9 @@ app.use(
     },
   }),
 );
-app.use("/api", rateLimit({ windowMs: 15 * 60 * 1000, limit: 900, standardHeaders: true, legacyHeaders: false }));
-app.use("/api/auth", rateLimit({ windowMs: 15 * 60 * 1000, limit: 100, standardHeaders: true, legacyHeaders: false }));
+// TODO: REVERT TO 900 BEFORE PRODUCTION LAUNCH
+app.use("/api", rateLimit({ windowMs: 15 * 60 * 1000, limit: 10000, standardHeaders: true, legacyHeaders: false }));
+app.use("/api/auth", rateLimit({ windowMs: 15 * 60 * 1000, limit: 1000, standardHeaders: true, legacyHeaders: false }));
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 

@@ -17,8 +17,9 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { design } from "../../constants/design";
 import { apiFetch } from "../../lib/api";
-import { connectSocket, onDriverAvailabilityUpdated } from "../../lib/socket";
+import { connectSocket, onDriverAvailabilityUpdated, onNewTripCreated } from "../../lib/socket";
 import { useDriverStore } from "../../store/driver";
+import { JobPing } from "../../components/driver/JobPing";
 import { useEarningsStore } from "../../store/earnings";
 import { useTripStore } from "../../store/trip";
 import type { Trip } from "../../types/trip";
@@ -61,6 +62,7 @@ export default function DriverDashboard() {
   const setActiveTrip = useDriverStore((s) => s.setActiveTrip);
 
   const [refreshing, setRefreshing] = useState(false);
+  const [incomingJob, setIncomingJob] = useState<any>(null);
   const [locationLabel, setLocationLabel] = useState("Location unavailable");
   const [lastGpsAt, setLastGpsAt] = useState<number | null>(null);
   const [gpsClock, setGpsClock] = useState(() => Date.now());
@@ -440,7 +442,18 @@ export default function DriverDashboard() {
       <View style={styles.locationCard}>
         <Ionicons name="location-outline" size={16} color={design.colors.muted} />
         <Text style={styles.locationText}>{locationLabel}</Text>
-      </View>
+      
+      {incomingJob && (
+        <JobPing
+          job={incomingJob}
+          onAccept={async (id) => {
+            setIncomingJob(null);
+            router.push(`/(driver)/active-trip?tripId=${id}`);
+          }}
+          onDecline={() => setIncomingJob(null)}
+        />
+      )}
+</View>
     </ScrollView>
   );
 }

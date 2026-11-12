@@ -112,7 +112,7 @@ export function BookingSheet({ flow, currentLocation, loadingLocation, submittin
         {flow.step === "vehicle" && (
           <>
             <Text style={styles.title}>Choose a vehicle</Text>
-            <Text style={styles.subtitle}>{flow.distanceKm} km straight-line distance, not road distance. Driver availability is checked after requesting.</Text>
+            <Text style={styles.subtitle}>Fare is estimated based on the direct route. Final price will be confirmed upon request.</Text>
             {VEHICLES.filter((item) => flow.suitableVehicleIds.includes(item.id)).map((item) => {
               const price = getPriceBreakdown(item.id, flow.loadSize, flow.distanceKm, flow.fragile).total;
               const selected = flow.selectedVehicle === item.id;
