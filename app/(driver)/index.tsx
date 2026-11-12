@@ -115,7 +115,14 @@ export default function DriverDashboard() {
 
     let loc: Location.LocationObject;
     try {
-      loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      // Try last known location first (instant)
+      const lastKnown = await Location.getLastKnownPositionAsync();
+      if (lastKnown) {
+        loc = lastKnown;
+      } else {
+        // Fallback to getting fresh GPS
+        loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      }
       setLastGpsAt(loc.timestamp || Date.now());
       await apiFetch("/drivers/me/location", {
         method: "PATCH",

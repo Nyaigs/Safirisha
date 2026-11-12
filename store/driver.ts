@@ -113,14 +113,16 @@ export const useDriverStore = create<DriverState>()(
 
       goOnline: async () => {
         if (get().isToggling) return;
-        set({ isToggling: true, error: null });
-
+        
         // Pre-check: block going online if active trip exists
         const existingActiveTrip = get().activeTrip;
         if (existingActiveTrip) {
-          set({ isToggling: false, error: "Cannot go online with an active trip" });
+          set({ error: "Cannot go online with an active trip" });
           throw new Error("Cannot go online with an active trip. Complete or cancel it first.");
         }
+
+        // OPTIMISTIC UI: Turn it green instantly
+        set({ isOnline: true, isToggling: true, error: null });
 
         try {
           const response = await apiFetch("/drivers/me/availability", {
@@ -138,7 +140,8 @@ export const useDriverStore = create<DriverState>()(
               : null,
           }));
         } catch (err: any) {
-          set({ isToggling: false, error: err?.message ?? "Could not go online" });
+          // Revert UI if API fails
+          set({ isOnline: false, isToggling: false, error: err?.message ?? "Could not go online" });
           throw err;
         }
         try {
