@@ -425,6 +425,60 @@ export default function DriverProfileScreen() {
 }
 
 const styles = StyleSheet.create({
+  profileHeader: {
+    alignItems: "center",
+    paddingVertical: 24,
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E5E7EB",
+  },
+  avatarLarge: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "#111827",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12,
+  },
+  avatarLargeText: {
+    color: "#FFFFFF",
+    fontSize: 32,
+    fontWeight: "800",
+  },
+  profileName: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#111827",
+    marginBottom: 4,
+  },
+  profileMeta: {
+    fontSize: 14,
+    color: "#6B7280",
+    marginBottom: 12,
+  },
+  badgesRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  badge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: "#F3F4F6",
+  },
+  badgeGreen: {
+    backgroundColor: "#DCFCE7",
+  },
+  badgeOrange: {
+    backgroundColor: "#FEF3C7",
+  },
+  badgeText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#111827",
+  },
+
   screen: {
     flex: 1,
     backgroundColor: "#f8fafc",
