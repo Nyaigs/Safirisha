@@ -83,7 +83,7 @@ export function BookingSheet({ flow, currentLocation, loadingLocation, submittin
                 </TouchableOpacity>
               ))}
             </View>
-            <TextInput value={flow.notes} onChangeText={flow.setNotes} placeholder="Special instructions (optional)" placeholderTextColor={design.colors.muted} style={styles.input} />
+            <TextInput value={flow.notes} onChangeText={flow.setNotes} placeholder="Gate number, building, or landmark (e.g. Gate 4, Blue Apartments)" placeholderTextColor={design.colors.muted} style={styles.input} />
             <View style={styles.toggle}>
               <Text style={styles.actionTitle}>Handle with care</Text>
               <Switch value={flow.fragile} onValueChange={flow.setFragile} trackColor={{ true: design.colors.brand }} />

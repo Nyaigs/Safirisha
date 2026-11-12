@@ -20,7 +20,7 @@ type Props = {
   onDecline: (jobId: string) => void;
 };
 
-const DURATION_SECONDS = 30;
+const DURATION_SECONDS = 45;
 const RING_SIZE = 112;
 const RING_STROKE = 8;
 const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;

@@ -467,19 +467,25 @@ export default function ActiveTripScreen() {
       currentStatus === "ACCEPTED" ||
       currentStatus === "DRIVER_EN_ROUTE" ||
       currentStatus === "ARRIVED_PICKUP";
+      
     const latitude = headingToPickup ? pickupLat : dropoffLat;
     const longitude = headingToPickup ? pickupLng : dropoffLng;
+    
     if (!isValidCoordinate(latitude) || !isValidCoordinate(longitude)) {
       Alert.alert("Navigation unavailable", "This trip does not have a valid destination yet.");
       return;
     }
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`;
+
+    // NATIVE DEEP LINKS for turn-by-turn voice guidance
+    const url = Platform.select({
+      ios: `maps://app?daddr=${latitude},${longitude}&dirflg=d`,
+      android: `google.navigation:q=${latitude},${longitude}&mode=d`,
+      default: `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`,
+    });
+
+    if (!url) return;
+
     try {
-      const supported = await Linking.canOpenURL(url);
-      if (!supported) {
-        Alert.alert("Navigation unavailable", "No maps app is available on this device.");
-        return;
-      }
       await Linking.openURL(url);
     } catch {
       Alert.alert("Navigation unavailable", "Unable to open directions right now.");
