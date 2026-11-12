@@ -19,6 +19,7 @@ import { design } from "../../constants/design";
 import { apiFetch } from "../../lib/api";
 import { connectSocket, onDriverAvailabilityUpdated } from "../../lib/socket";
 import { useDriverStore } from "../../store/driver";
+import { useEarningsStore } from "../../store/earnings";
 import { useTripStore } from "../../store/trip";
 import type { Trip } from "../../types/trip";
 
@@ -47,6 +48,8 @@ function getGreeting() {
 export default function DriverDashboard() {
   const insets = useSafeAreaInsets();
   const driverProfile = useDriverStore((s) => s.driverProfile);
+  const earningsTotals = useEarningsStore((s) => s.totals);
+  const fetchEarnings = useEarningsStore((s) => s.fetchEarnings);
   const activeTrip = useDriverStore((s) => s.activeTrip);
   const isOnline = useDriverStore((s) => s.isOnline);
   const isLoading = useDriverStore((s) => s.isLoading);
@@ -76,7 +79,7 @@ export default function DriverDashboard() {
     [driverProfile?.vehicleType],
   );
 
-  useEffect(() => { initialize(); }, [initialize]);
+  useEffect(() => { initialize(); void fetchEarnings("initial"); }, [initialize, fetchEarnings]);
 
   useFocusEffect(
     useCallback(() => { initialize(); }, [initialize]),
@@ -368,12 +371,12 @@ export default function DriverDashboard() {
       <View style={styles.statsRow}>
         <View style={styles.statCard}>
           <MaterialCommunityIcons name="cash" size={22} color={design.colors.success} />
-          <Text style={styles.statValue}>KES 0</Text>
+          <Text style={styles.statValue}>KES {Number(earningsTotals?.net || 0).toLocaleString()}</Text>
           <Text style={styles.statLabel}>Earnings</Text>
         </View>
         <View style={styles.statCard}>
           <MaterialCommunityIcons name="briefcase-check" size={22} color={design.colors.brand} />
-          <Text style={styles.statValue}>0</Text>
+          <Text style={styles.statValue}>{earningsTotals?.tripCount || 0}</Text>
           <Text style={styles.statLabel}>Jobs Done</Text>
         </View>
         <View style={styles.statCard}>

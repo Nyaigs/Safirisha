@@ -1,15 +1,6 @@
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  Pressable,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { ActivityIndicator, Alert, FlatList, Image, Pressable, RefreshControl, StyleSheet, Text, View , TextInput, Modal, KeyboardAvoidingView, Platform} from "react-native";
 import { apiFetch } from "../../lib/api";
 
 type PendingDriver = {
@@ -37,6 +28,9 @@ export default function PendingDriversScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [actingId, setActingId] = useState<string | null>(null);
+  const [rejectModalVisible, setRejectModalVisible] = useState(false);
+  const [rejectingDriverId, setRejectingDriverId] = useState<string | null>(null);
+  const [rejectionReason, setRejectionReason] = useState("");
 
   const fetchPendingDrivers = useCallback(async () => {
     const data = await apiFetch("/admin/drivers/pending");
@@ -97,26 +91,38 @@ export default function PendingDriversScreen() {
     }
   };
 
-  const rejectDriver = async (driverId: string) => {
-    try {
-      setActingId(driverId);
+  const openRejectModal = (driverId: string) => {
+    setRejectingDriverId(driverId);
+    setRejectionReason("");
+    setRejectModalVisible(true);
+  };
 
-      await apiFetch(`/admin/drivers/${driverId}/approval`, {
+  const submitRejection = async () => {
+    if (!rejectingDriverId) return;
+    if (rejectionReason.trim().length < 5) {
+      Alert.alert("Reason Required", "Please provide a valid rejection reason (at least 5 characters).");
+      return;
+    }
+
+    try {
+      setActingId(rejectingDriverId);
+      setRejectModalVisible(false); // Close modal immediately
+      
+      await apiFetch(`/admin/drivers/${rejectingDriverId}/approval`, {
         method: "PATCH",
         body: {
           approvalStatus: "REJECTED",
+          rejectionReason: rejectionReason.trim(),
         },
       });
 
       Alert.alert("Success", "Driver rejected successfully.");
       await fetchPendingDrivers();
     } catch (error: any) {
-      Alert.alert(
-        "Rejection failed",
-        error?.message || "Could not reject driver",
-      );
+      Alert.alert("Rejection failed", error?.message || "Could not reject driver.");
     } finally {
       setActingId(null);
+      setRejectingDriverId(null);
     }
   };
 
@@ -132,6 +138,7 @@ export default function PendingDriversScreen() {
   }
 
   return (
+    <>
     <FlatList
       style={styles.screen}
       data={drivers}
@@ -212,6 +219,29 @@ export default function PendingDriversScreen() {
               <Text style={styles.infoValue}>{item.availability}</Text>
             </View>
 
+            <View style={styles.kycImagesContainer}>
+              <Text style={styles.kycImagesTitle}>KYC Documents</Text>
+              <View style={styles.kycImageRow}>
+                <View style={styles.kycImageBox}>
+                  <Text style={styles.kycImageLabel}>Vehicle Image</Text>
+                  {item.vehicleImageUrl ? (
+                    <Image source={{ uri: `${process.env.EXPO_PUBLIC_API_BASE_URL?.replace('/api', '')}${item.vehicleImageUrl}` }} style={styles.kycImage} />
+                  ) : (
+                    <Text style={styles.kycNoImage}>No image uploaded</Text>
+                  )}
+                </View>
+                
+                <View style={styles.kycImageBox}>
+                  <Text style={styles.kycImageLabel}>Ownership Proof</Text>
+                  {item.ownershipProofUrl ? (
+                    <Image source={{ uri: `${process.env.EXPO_PUBLIC_API_BASE_URL?.replace('/api', '')}${item.ownershipProofUrl}` }} style={styles.kycImage} />
+                  ) : (
+                    <Text style={styles.kycNoImage}>No image uploaded</Text>
+                  )}
+                </View>
+              </View>
+            </View>
+
             <View style={styles.actionsRow}>
               <Pressable
                 style={[styles.approveBtn, isActing && styles.disabledBtn]}
@@ -227,7 +257,7 @@ export default function PendingDriversScreen() {
 
               <Pressable
                 style={[styles.rejectBtn, isActing && styles.disabledBtn]}
-                onPress={() => rejectDriver(item.id)}
+                onPress={() => openRejectModal(item.id)}
                 disabled={isActing}
               >
                 {isActing ? (
@@ -241,6 +271,34 @@ export default function PendingDriversScreen() {
         );
       }}
     />
+
+      <Modal visible={rejectModalVisible} transparent animationType="fade" onRequestClose={() => setRejectModalVisible(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Reject Driver</Text>
+            <Text style={styles.modalSubtitle}>Please provide a reason. The driver will see this in the app.</Text>
+            
+            <TextInput
+              style={styles.modalInput}
+              placeholder="e.g., Vehicle image is blurry, plate number mismatch..."
+              placeholderTextColor="#9CA3AF"
+              multiline
+              value={rejectionReason}
+              onChangeText={setRejectionReason}
+            />
+
+            <View style={styles.modalActions}>
+              <Pressable style={[styles.modalBtn, styles.modalCancelBtn]} onPress={() => setRejectModalVisible(false)}>
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable style={[styles.modalBtn, styles.modalConfirmBtn]} onPress={submitRejection}>
+                <Text style={styles.modalConfirmText}>Confirm Reject</Text>
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+    </>
   );
 }
 
@@ -254,6 +312,117 @@ function InfoBox({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  modalContent: {
+    width: "100%",
+    maxWidth: 400,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 24,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#111827",
+    marginBottom: 8,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: "#6B7280",
+    marginBottom: 16,
+  },
+  modalInput: {
+    backgroundColor: "#F3F4F6",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 8,
+    padding: 12,
+    minHeight: 100,
+    textAlignVertical: "top",
+    color: "#111827",
+    marginBottom: 20,
+  },
+  modalActions: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  modalBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalCancelBtn: {
+    backgroundColor: "#F3F4F6",
+  },
+  modalCancelText: {
+    color: "#374151",
+    fontWeight: "600",
+  },
+  modalConfirmBtn: {
+    backgroundColor: "#DC2626",
+  },
+  modalConfirmText: {
+    color: "#FFFFFF",
+    fontWeight: "600",
+  },
+
+  kycImagesContainer: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+    marginBottom: 8,
+  },
+  kycImagesTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#374151",
+    marginBottom: 12,
+  },
+  kycImageRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  kycImageBox: {
+    flex: 1,
+    backgroundColor: "#F9FAFB",
+    borderRadius: 8,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 120,
+  },
+  kycImageLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#6B7280",
+    marginBottom: 6,
+    textAlign: "center",
+  },
+  kycImage: {
+    width: "100%",
+    height: 90,
+    borderRadius: 6,
+    resizeMode: "contain",
+    backgroundColor: "#E5E7EB",
+  },
+  kycNoImage: {
+    fontSize: 11,
+    color: "#EF4444",
+    textAlign: "center",
+    fontStyle: "italic",
+  },
+
   screen: {
     flex: 1,
     backgroundColor: "#F5F7FA",

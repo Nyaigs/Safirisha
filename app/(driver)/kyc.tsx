@@ -109,14 +109,14 @@ export default function DriverKycScreen() {
 
       formData.append("vehicleImage", {
         uri: vehicleImage!.uri,
-        name: vehicleImage!.name,
-        type: vehicleImage!.type,
+        name: vehicleImage!.name || `vehicle-${Date.now()}.jpg`,
+        type: vehicleImage!.type || "image/jpeg",
       } as any);
 
       formData.append("ownershipProof", {
         uri: ownershipProof!.uri,
-        name: ownershipProof!.name,
-        type: ownershipProof!.type,
+        name: ownershipProof!.name || `ownership-${Date.now()}.jpg`,
+        type: ownershipProof!.type || "image/jpeg",
       } as any);
 
       await apiFetch("/drivers/me/kyc", {
