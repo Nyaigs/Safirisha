@@ -5,16 +5,12 @@ import {
   Alert,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
 
 export default function SettingsScreen() {
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [smsUpdates, setSmsUpdates] = useState(false);
-
   const handleClearCache = () => {
     Alert.alert(
       "Clear Cache",
@@ -48,35 +44,6 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        <Text style={styles.sectionTitle}>Notifications</Text>
-        <View style={styles.card}>
-          <View style={styles.settingRow}>
-            <View style={styles.settingLeft}>
-              <Ionicons name="notifications-outline" size={20} color="#111827" />
-              <Text style={styles.settingText}>Push Notifications</Text>
-            </View>
-            <Switch
-              value={notificationsEnabled}
-              onValueChange={setNotificationsEnabled}
-              trackColor={{ false: "#e5e7eb", true: "#111827" }}
-              thumbColor="#fff"
-            />
-          </View>
-          <View style={styles.divider} />
-          <View style={styles.settingRow}>
-            <View style={styles.settingLeft}>
-              <Ionicons name="chatbubble-outline" size={20} color="#111827" />
-              <Text style={styles.settingText}>SMS Updates</Text>
-            </View>
-            <Switch
-              value={smsUpdates}
-              onValueChange={setSmsUpdates}
-              trackColor={{ false: "#e5e7eb", true: "#111827" }}
-              thumbColor="#fff"
-            />
-          </View>
-        </View>
-
         <Text style={styles.sectionTitle}>Support</Text>
         <View style={styles.card}>
           <TouchableOpacity
@@ -91,19 +58,6 @@ export default function SettingsScreen() {
             <View style={styles.settingLeft}>
               <Ionicons name="call-outline" size={20} color="#111827" />
               <Text style={styles.settingText}>Contact Us</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color="#6b7280" />
-          </TouchableOpacity>
-          <View style={styles.divider} />
-          <TouchableOpacity
-            style={styles.settingRow}
-            onPress={() =>
-              Alert.alert("FAQ", "Frequently asked questions coming soon.")
-            }
-          >
-            <View style={styles.settingLeft}>
-              <Ionicons name="help-circle-outline" size={20} color="#111827" />
-              <Text style={styles.settingText}>FAQ</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color="#6b7280" />
           </TouchableOpacity>

@@ -31,7 +31,8 @@ const VEHICLE_LOAD_SIZES: Record<string, string[]> = {
 };
 
 export function isVehicleSuitableForLoad(vehicleType: string, loadSize: string) {
-  return VEHICLE_LOAD_SIZES[vehicleType]?.includes(loadSize) ?? false;
+  const normalizedLoad = loadSize.trim().toUpperCase().replace(/\s+/g, "_");
+  return VEHICLE_LOAD_SIZES[vehicleType]?.includes(normalizedLoad) ?? false;
 }
 
 export function estimateTripMinutes(distanceKm: number): number {

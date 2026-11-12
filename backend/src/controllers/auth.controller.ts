@@ -434,6 +434,14 @@ export async function updateMe(req: AuthRequest, res: Response) {
 
     const { fullName, username, email, phone } = req.body;
 
+    if (phone) {
+      const phoneRegex = /^\+?254[17]\d{8}$/;
+      if (!phoneRegex.test(phone.replace(/\s+/g, ""))) {
+        return res.status(400).json({ message: "Invalid Kenyan phone number format (e.g., +254712345678 or 0712345678)." });
+      }
+    }
+
+
     const updateData: Record<string, unknown> = {};
 
     if (fullName !== undefined) {

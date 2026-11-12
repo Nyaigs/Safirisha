@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { router, useFocusEffect } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState , useEffect} from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -173,11 +173,15 @@ export default function DriverProfileScreen() {
   const auth = useAuthStore();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [profile, setProfile] = useState<DriverProfileResponse | null>(
-    buildInitialProfile,
-  );
+  const [profile, setProfile] = useState<DriverProfileResponse | null>(() => buildInitialProfile());
   const [errorMsg, setErrorMsg] = useState("");
   const [locationLabel, setLocationLabel] = useState("Location not available");
+
+  // Sync local state with Zustand store when auth.user updates (e.g., after KYC)
+  useEffect(() => {
+    const fresh = buildInitialProfile();
+    if (fresh) setProfile(fresh);
+  }, [auth.user]);
 
   const fetchProfile = useCallback(async () => {
     try {
@@ -401,14 +405,9 @@ export default function DriverProfileScreen() {
       <SectionRow
         icon="shield-checkmark-outline"
         title="Verification Status"
-        subtitle="KYC edit flow will be connected next."
+        subtitle="View or update your KYC documents."
         badge={approvalStatus}
-        onPress={() =>
-          Alert.alert(
-            "Verification",
-            "Driver KYC edit flow is the next screen to wire cleanly.",
-          )
-        }
+        onPress={() => router.push("/(driver)/kyc")}
       />
 
       {profile?.suspensionReason ? (

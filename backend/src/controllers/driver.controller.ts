@@ -1,5 +1,5 @@
 import { DriverAvailability, RequestStatus } from "@prisma/client";
-import { Response } from "express";
+import { Request, Response } from "express";
 import { prisma } from "../lib/prisma";
 import { AuthRequest } from "../middleware/auth.middleware";
 import { AppError } from "../middleware/error.middleware";
@@ -360,6 +360,18 @@ export async function acceptTrip(req: AuthRequest, res: Response) {
 }
 
 // ---------- NEW: KYC UPDATE ----------
+
+function normalizeVehicleForDB(type: string | undefined | null): string | undefined {
+  if (!type) return undefined;
+  const t = type.trim().toUpperCase();
+  if (t.includes("BIKE") || t.includes("BODA") || t.includes("MOTOR")) return "BIKE";
+  if (t.includes("TUK")) return "TUKTUK";
+  if (t.includes("PICKUP") || t.includes("PICK_UP")) return "PICKUP";
+  if (t.includes("LORRY")) return "MEDIUM_LORRY";
+  if (t.includes("TRUCK")) return "LARGE_TRUCK";
+  return t;
+}
+
 export async function updateDriverKyc(req: AuthRequest, res: Response) {
   try {
     const {
@@ -377,14 +389,25 @@ export async function updateDriverKyc(req: AuthRequest, res: Response) {
     const driver = await prisma.driverProfile.findUnique({ where: { userId } });
     if (!driver) return res.status(404).json({ message: "Driver not found" });
 
+    const files = req.files as Record<string, Express.Multer.File[]> | undefined;
+    let finalVehicleImageUrl = vehicleImageUrl ?? driver.vehicleImageUrl;
+    let finalOwnershipProofUrl = ownershipProofUrl ?? driver.ownershipProofUrl;
+
+    if (files?.vehicleImage?.[0]) {
+      finalVehicleImageUrl = `/uploads/vehicles/${files.vehicleImage[0].filename}`;
+    }
+    if (files?.ownershipProof?.[0]) {
+      finalOwnershipProofUrl = `/uploads/ownership/${files.ownershipProof[0].filename}`;
+    }
+
     const updated = await prisma.driverProfile.update({
       where: { id: driver.id },
       data: {
         plateNumber: plateNumber ?? driver.plateNumber,
-        vehicleType: vehicleType ?? driver.vehicleType,
+        vehicleType: normalizeVehicleForDB(vehicleType) ?? driver.vehicleType,
         driverLicenseNumber: driverLicenseNumber ?? driver.driverLicenseNumber,
-        vehicleImageUrl: vehicleImageUrl ?? driver.vehicleImageUrl,
-        ownershipProofUrl: ownershipProofUrl ?? driver.ownershipProofUrl,
+        vehicleImageUrl: finalVehicleImageUrl,
+        ownershipProofUrl: finalOwnershipProofUrl,
         complianceCertificateUrl: complianceCertificateUrl ?? driver.complianceCertificateUrl,
         kycSubmittedAt: new Date(),
       },

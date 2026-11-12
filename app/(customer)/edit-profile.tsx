@@ -26,6 +26,13 @@ export default function EditProfileScreen() {
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
+    // Kenyan phone validation (+254 7XX XXX XXX or 01XX XXX XXX)
+    const phoneRegex = /^\+?254[17]\d{8}$/;
+    if (phone && !phoneRegex.test(phone.replace(/\s+/g, ""))) {
+      Alert.alert("Invalid Phone", "Please enter a valid Kenyan number (e.g., +254712345678).");
+      return;
+    }
+
     if (!fullName.trim()) {
       Alert.alert("Validation", "Full name is required.");
       return;

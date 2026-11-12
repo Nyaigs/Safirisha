@@ -180,8 +180,8 @@ export default function ProfileScreen() {
             onPress={() => router.push("/(customer)/settings")}
           >
             <View style={styles.menuLeft}>
-              <Ionicons name="call-outline" size={20} color={design.colors.ink} />
-              <Text style={styles.menuText}>Support</Text>
+              <Ionicons name="settings-outline" size={20} color={design.colors.ink} />
+              <Text style={styles.menuText}>Settings</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={design.colors.muted} />
           </TouchableOpacity>
@@ -193,17 +193,6 @@ export default function ProfileScreen() {
             <View style={styles.menuLeft}>
               <Ionicons name="shield-checkmark-outline" size={20} color={design.colors.ink} />
               <Text style={styles.menuText}>Privacy & Security</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={design.colors.muted} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.menuItem, styles.menuItemLast]}
-            onPress={() => router.push("/(customer)/settings")}
-          >
-            <View style={styles.menuLeft}>
-              <Ionicons name="settings-outline" size={20} color={design.colors.ink} />
-              <Text style={styles.menuText}>Settings</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={design.colors.muted} />
           </TouchableOpacity>

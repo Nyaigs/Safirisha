@@ -24,7 +24,7 @@ function getVehicleTypeAliases(input: string): string[] {
     BIKE: ["BIKE", "MOTORBIKE", "BODA"],
     TUKTUK: ["TUKTUK", "TUK_TUK"],
     PICKUP: ["PICKUP"],
-    MEDIUM_LORRY: ["MEDIUM_LORRY", "LORRY"],
+    MEDIUM_LORRY: ["MEDIUM_LORRY", "LORRY", "LARGE_TRUCK", "TRUCK"],
     LARGE_TRUCK: ["LARGE_TRUCK", "TRUCK"],
   };
   return map[normalized] || [normalized];
