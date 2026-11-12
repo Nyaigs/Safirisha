@@ -63,6 +63,7 @@ export default function DriverDashboard() {
 
   const [refreshing, setRefreshing] = useState(false);
   const [incomingJob, setIncomingJob] = useState<any>(null);
+  const [accepting, setAccepting] = useState(false);
   const [locationLabel, setLocationLabel] = useState("Location unavailable");
   const [lastGpsAt, setLastGpsAt] = useState<number | null>(null);
   const [gpsClock, setGpsClock] = useState(() => Date.now());
@@ -446,9 +447,12 @@ export default function DriverDashboard() {
       {incomingJob && (
         <JobPing
           job={incomingJob}
+          accepting={accepting}
           onAccept={async (id) => {
+            setAccepting(true);
             setIncomingJob(null);
             router.push(`/(driver)/active-trip?tripId=${id}`);
+            setTimeout(() => setAccepting(false), 1000);
           }}
           onDecline={() => setIncomingJob(null)}
         />

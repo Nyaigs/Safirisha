@@ -425,6 +425,24 @@ export default function DriverProfileScreen() {
 }
 
 const styles = StyleSheet.create({
+  badge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: "#F3F4F6",
+  },
+  badgeGreen: {
+    backgroundColor: "#DCFCE7",
+  },
+  badgeOrange: {
+    backgroundColor: "#FEF3C7",
+  },
+  badgeText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#111827",
+  },
+
   profileHeader: {
     alignItems: "center",
     paddingVertical: 24,
@@ -461,25 +479,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8,
   },
-  badge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: "#F3F4F6",
-  },
-  badgeGreen: {
-    backgroundColor: "#DCFCE7",
-  },
-  badgeOrange: {
-    backgroundColor: "#FEF3C7",
-  },
-  badgeText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#111827",
-  },
-
-  screen: {
+screen: {
     flex: 1,
     backgroundColor: "#f8fafc",
   },
@@ -541,15 +541,6 @@ const styles = StyleSheet.create({
     gap: 8,
     flexWrap: "wrap",
     marginTop: 16,
-  },
-  badge: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-  },
-  badgeText: {
-    fontWeight: "900",
-    fontSize: 12,
   },
   badgeApproved: {
     backgroundColor: "#dcfce7",
