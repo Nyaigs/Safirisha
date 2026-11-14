@@ -47,6 +47,10 @@ type TripWithAddresses = Trip & {
   estimatedPrice?: number;
   customerName?: string;
   customerPhone?: string;
+  senderName?: string;
+  senderPhone?: string;
+  recipientName?: string;
+  recipientPhone?: string;
   specialNotes?: string;
   loadDescription?: string;
   loadSize?: string;
@@ -711,6 +715,27 @@ export default function ActiveTripScreen() {
             </View>
           )}
         </View>
+
+        {/* Sender & Recipient Details Card */}
+        {(trip.senderName || trip.recipientName) && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Sender & Recipient</Text>
+            {trip.senderName && (
+              <View style={{ marginBottom: 12 }}>
+                <Text style={{ fontSize: 12, color: "#6B7280", fontWeight: "600", textTransform: "uppercase" }}>Sender (At Pickup)</Text>
+                <Text style={{ fontSize: 15, color: "#111827", fontWeight: "800", marginTop: 2 }}>{trip.senderName}</Text>
+                <Text style={{ fontSize: 14, color: "#111827", fontWeight: "600" }}>{trip.senderPhone}</Text>
+              </View>
+            )}
+            {trip.recipientName && (
+              <View>
+                <Text style={{ fontSize: 12, color: "#6B7280", fontWeight: "600", textTransform: "uppercase" }}>Recipient (At Drop-off)</Text>
+                <Text style={{ fontSize: 15, color: "#111827", fontWeight: "800", marginTop: 2 }}>{trip.recipientName}</Text>
+                <Text style={{ fontSize: 14, color: "#111827", fontWeight: "600" }}>{trip.recipientPhone}</Text>
+              </View>
+            )}
+          </View>
+        )}
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Trip Money</Text>
