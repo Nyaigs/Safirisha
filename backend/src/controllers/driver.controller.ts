@@ -120,7 +120,7 @@ export async function getNearbyTripRequests(req: AuthRequest, res: Response) {
        where: {
          status: { in: ["SEARCHING", "SEARCHING_DRIVER"] },
        },
-       include: { customer: { select: { id: true, fullName: true, phone: true } } },
+       include: { customer: { select: { id: true, fullName: true } } }, // PII FIX: Phone removed until accepted
        orderBy: { createdAt: "desc" },
        take: 50,
      });
