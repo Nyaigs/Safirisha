@@ -23,7 +23,6 @@ export default function RegisterScreen() {
   const login = useAuthStore((state) => state.login);
 
   const [fullName, setFullName] = useState("");
-  const [username, setUsername] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<PublicRole>("CUSTOMER");
@@ -39,19 +38,8 @@ export default function RegisterScreen() {
       return false;
     }
 
-    if (!username.trim()) {
-      Alert.alert("Missing username", "Please choose a username.");
-      return false;
-    }
 
     const usernameRegex = /^[a-zA-Z0-9_.]{3,20}$/;
-    if (!usernameRegex.test(username.trim())) {
-      Alert.alert(
-        "Invalid username",
-        "Username must be 3-20 characters and only use letters, numbers, underscore or dot.",
-      );
-      return false;
-    }
 
     if (!phone.trim()) {
       Alert.alert("Missing phone", "Please enter your phone number.");
@@ -110,7 +98,6 @@ export default function RegisterScreen() {
         method: "POST",
         body: {
           fullName: fullName.trim(),
-          username: username.trim().toLowerCase(),
           phone: phone.trim(),
           email: email.trim().toLowerCase(),
           password,
@@ -177,9 +164,6 @@ export default function RegisterScreen() {
           </View>
           <Text style={styles.brand}>Safirisha</Text>
           <Text style={styles.heroTitle}>Create your account.</Text>
-          <Text style={styles.heroSubtitle}>
-            Legacy signup remains active while Clerk is being phased in.
-          </Text>
         </View>
 
         <View style={styles.card}>
@@ -202,19 +186,7 @@ export default function RegisterScreen() {
             />
           </View>
 
-          <View style={styles.formGroup}>
-            <Text style={styles.label}>Username</Text>
-            <TextInput
-              value={username}
-              onChangeText={setUsername}
-              placeholder="e.g. delivery_user"
-              placeholderTextColor="#94A3B8"
-              style={styles.input}
-              autoCapitalize="none"
-              autoCorrect={false}
-              returnKeyType="next"
-            />
-          </View>
+          
 
           <View style={styles.formGroup}>
             <Text style={styles.label}>Phone Number</Text>

@@ -382,27 +382,6 @@ export default function DriverProfileScreen() {
       </View>
 
       <SectionRow
-        icon="home-outline"
-        title="Driver Home"
-        subtitle="Go back to your driver dashboard."
-        onPress={() => router.push("/(driver)")}
-      />
-
-      <SectionRow
-        icon="briefcase-outline"
-        title="Available Jobs"
-        subtitle="See nearby matching requests."
-        onPress={() => router.push("/(driver)/jobs")}
-      />
-
-      <SectionRow
-        icon="cash-outline"
-        title="Earnings"
-        subtitle="Review driver income and delivered jobs."
-        onPress={() => router.push("/(driver)/earnings")}
-      />
-
-      <SectionRow
         icon="shield-checkmark-outline"
         title="Verification Status"
         subtitle="View or update your KYC documents."
