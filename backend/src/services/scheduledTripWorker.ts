@@ -2,6 +2,7 @@ import { prisma } from "../lib/prisma";
 import type { Server } from "socket.io";
 import { findNearbyDrivers } from "./dispatch.service";
 import { getExpiryDate } from "./trip.service";
+import { cleanupExpiredQuotes } from "./quote.service";
 
 /**
  * Closes unclaimed dispatches after their server-assigned search window. The
@@ -85,5 +86,16 @@ export async function processScheduledTrips(io?: Server) {
     }
   } catch (error) {
     console.error("Error processing scheduled trips:", error);
+  }
+}
+
+export async function cleanupExpiredQuotesJob() {
+  try {
+    const count = await cleanupExpiredQuotes();
+    if (count > 0) {
+      console.log(`Cleaned up ${count} expired quotes`);
+    }
+  } catch (error) {
+    console.error("Error cleaning up expired quotes:", error);
   }
 }

@@ -71,6 +71,13 @@ export type PriceBreakdown = {
   appliedMinFare: boolean;
 };
 
+export type PriceBreakdownWithRates = PriceBreakdown & {
+  base: number;
+  perKm: number;
+  perMin: number;
+  minFare: number;
+};
+
 export function getPriceBreakdown(
   vehicleType: string,
   loadSize: string,
@@ -108,6 +115,26 @@ export function getPriceBreakdown(
     fragile, fragileAdjustment,
     surgeMultiplier, surgeAdjustment, surgeReason,
     preFloorTotal: afterSurge, total, estimatedMinutes, appliedMinFare,
+  };
+}
+
+export function getPriceBreakdownWithRates(
+  vehicleType: string,
+  loadSize: string,
+  distanceKm: number,
+  fragile = false,
+  at: Date = new Date(),
+): PriceBreakdownWithRates | null {
+  const breakdown = getPriceBreakdown(vehicleType, loadSize, distanceKm, fragile, at);
+  if (!breakdown) return null;
+
+  const rates = VEHICLE_RATES[vehicleType];
+  return {
+    ...breakdown,
+    base: rates.base,
+    perKm: rates.perKm,
+    perMin: rates.perMin,
+    minFare: rates.minFare,
   };
 }
 

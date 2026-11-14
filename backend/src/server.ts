@@ -9,6 +9,7 @@ import { processScheduledDeletions } from "./services/deletionworker";
 import {
   expireStaleSearchingTrips,
   processScheduledTrips,
+  cleanupExpiredQuotesJob,
 } from "./services/scheduledTripWorker";
 import { initSocket } from "./socket/index";
 
@@ -65,6 +66,19 @@ async function startServer() {
         console.log("Database asleep, skipping trip worker...");
       } else {
         console.error("Trip worker failed:", error);
+      }
+    }
+  });
+
+  // Run quote cleanup every minute
+  cron.schedule("* * * * *", async () => {
+    try {
+      await cleanupExpiredQuotesJob();
+    } catch (error: any) {
+      if (error.code === "P1001") {
+        console.log("Database asleep, skipping quote cleanup...");
+      } else {
+        console.error("Quote cleanup failed:", error);
       }
     }
   });

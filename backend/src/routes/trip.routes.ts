@@ -10,7 +10,7 @@ import {
   createTripRequest,
   getMyCustomerActiveTrip,
   getMyDriverActiveTrip,
-  getMyScheduledTrips, // <-- NEW
+  getMyScheduledTrips,
   getMyTripStats,
   getMyTrips,
   getTripById,
@@ -21,6 +21,7 @@ import { authenticate } from "../middleware/auth.middleware";
 import { authorizeRoles } from "../middleware/role.middleware";
 import { validate } from "../middleware/zod.middleware";
 import { z } from "zod";
+import quoteRoutes from "./quote.routes";
 
 const router = Router();
 
@@ -34,16 +35,34 @@ const createTripSchema = z.object({
     dropoffLng: z.number().min(-180).max(180),
     vehicleType: z.string().min(1),
     loadSize: z.string().min(1),
-    estimatedPrice: z.number().positive(),
-    distanceKm: z.number().positive(),
+    // Optional when using quoteId
+    estimatedPrice: z.number().positive().optional(),
+    distanceKm: z.number().positive().optional(),
+    // Quote ID for locked pricing
+    quoteId: z.string().optional().nullable(),
     loadDescription: z.string().optional().nullable(),
     specialNotes: z.string().optional().nullable(),
     scheduledFor: z.string().datetime().optional().nullable(),
     paymentMethod: z.enum(["CASH", "MPESA"]).optional().nullable(),
+    senderName: z.string().optional().nullable(),
+    senderPhone: z.string().optional().nullable(),
+    recipientName: z.string().optional().nullable(),
+    recipientPhone: z.string().optional().nullable(),
   }),
-});
+}).refine(
+  (data) => {
+    // Either quoteId OR (estimatedPrice AND distanceKm) must be provided
+    const hasQuote = !!data.body.quoteId;
+    const hasLegacyPricing = !!data.body.estimatedPrice && !!data.body.distanceKm;
+    return hasQuote !== hasLegacyPricing; // XOR - exactly one must be true
+  },
+  {
+    message: "Either quoteId OR (estimatedPrice AND distanceKm) must be provided, but not both",
+    path: ["quoteId"],
+  },
+);
 
-
+router.use("/quote", quoteRoutes);
 
 router.post("/", authenticate, authorizeRoles("CUSTOMER"), validate(createTripSchema), createTripRequest);
 
@@ -68,7 +87,7 @@ router.get(
   authenticate,
   authorizeRoles("CUSTOMER"),
   getMyScheduledTrips,
-); // <-- NEW
+);
 
 router.post("/:id/rating", authenticate, authorizeRoles("CUSTOMER"), rateCompletedTrip);
 

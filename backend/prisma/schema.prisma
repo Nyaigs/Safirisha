@@ -31,6 +31,7 @@ model User {
   customerRequests           TransportRequest[] @relation("CustomerRequests")
   ratingsGiven               TripRating[]       @relation("CustomerRatings")
   notifications              Notification[]
+  quotes                     Quote[]
 
   @@index([role])
   @@index([isActive])
@@ -106,9 +107,11 @@ model TransportRequest {
   searchStartedAt        DateTime?
   pickupConfirmed        Boolean         @default(false)
   deliveryConfirmed      Boolean         @default(false)
+  quoteId                String?         @unique
   assignedDriver         DriverProfile?  @relation("AssignedDriverRequests", fields: [assignedDriverId], references: [id])
   customer               User            @relation("CustomerRequests", fields: [customerId], references: [id], onDelete: Cascade)
   rating                 TripRating?
+  quote                  Quote?          @relation(fields: [quoteId], references: [id], onDelete: SetNull)
 }
 
 model DriverDeletionRequest {
@@ -202,6 +205,49 @@ enum DeletionRequestStatus {
 enum CancellationBy {
   CUSTOMER
   DRIVER
+}
+
+enum QuoteStatus {
+  ACTIVE
+  USED
+  EXPIRED
+}
+
+model Quote {
+  id                   String       @id @default(cuid())
+  customerId           String
+  pickupLat            Float
+  pickupLng            Float
+  dropoffLat           Float
+  dropoffLng           Float
+  vehicleType          String
+  loadSize             String
+  loadDescription      String?
+  distanceKm           Float
+  baseFare             Int
+  perKmRate            Int
+  perMinRate           Int
+  estimatedMinutes     Int
+  loadMultiplier       Float
+  fragileMultiplier    Float
+  surgeMultiplier      Float
+  surgeReason          String?
+  subtotal             Int
+  total                Int
+  minFareApplied       Boolean
+  platformFeePercent   Float
+  platformFeeAmount    Float
+  driverNetEarning     Float
+  expiresAt            DateTime
+  createdAt            DateTime     @default(now())
+  usedAt               DateTime?
+  status               QuoteStatus  @default(ACTIVE)
+
+  customer             User         @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  trip                 TransportRequest?
+
+  @@index([customerId, status])
+  @@index([expiresAt])
 }
 
 model Notification {

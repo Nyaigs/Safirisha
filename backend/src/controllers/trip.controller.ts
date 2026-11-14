@@ -7,6 +7,7 @@ import { buildTripFinancials, calculateTripPrice, isVehicleSuitableForLoad } fro
 import { DRIVER_LOCATION_MAX_AGE_MS, findNearbyDrivers, hasFreshDriverLocation } from "../services/dispatch.service";
 import { createNotification } from "../services/notification.service";
 import { getExpiryDate } from "../services/trip.service";
+import { getValidQuote, markQuoteUsed } from "../services/quote.service";
 
 const DRIVER_ACCEPT_RADIUS_KM = 25;
 
@@ -285,6 +286,7 @@ export async function createTripRequest(req: AuthRequest, res: Response) {
       senderPhone,
       recipientName,
       recipientPhone,
+      quoteId,
     } = req.body as {
       pickupAddress?: string;
       pickupLat?: number;
@@ -304,8 +306,10 @@ export async function createTripRequest(req: AuthRequest, res: Response) {
       senderPhone?: string;
       recipientName?: string;
       recipientPhone?: string;
+      quoteId?: string | null;
     };
 
+    // Validate required fields (coordinates, vehicle, loadSize always required)
     if (
       !pickupAddress ||
       pickupLat == null ||
@@ -314,13 +318,11 @@ export async function createTripRequest(req: AuthRequest, res: Response) {
       dropoffLat == null ||
       dropoffLng == null ||
       !vehicleType ||
-      !loadSize ||
-      estimatedPrice == null ||
-      distanceKm == null
+      !loadSize
     ) {
       return res.status(400).json({
         message:
-          "pickupAddress, pickupLat, pickupLng, dropoffAddress, dropoffLat, dropoffLng, vehicleType, loadSize, estimatedPrice and distanceKm are required",
+          "pickupAddress, pickupLat, pickupLng, dropoffAddress, dropoffLat, dropoffLng, vehicleType, and loadSize are required",
       });
     }
 
@@ -336,8 +338,9 @@ export async function createTripRequest(req: AuthRequest, res: Response) {
 
     const normalizedVehicleType = normalizeVehicleType(vehicleType);
     const normalizedLoadSize = String(loadSize).trim().toUpperCase().replace(/\s+/g, "_");
-    const calculatedPrice = calculateTripPrice(normalizedVehicleType, normalizedLoadSize, calculatedDistanceKm);
-    if (calculatedPrice === null || !isVehicleSuitableForLoad(normalizedVehicleType, normalizedLoadSize)) {
+
+    // Validate vehicle-load compatibility
+    if (!isVehicleSuitableForLoad(normalizedVehicleType, normalizedLoadSize)) {
       return res.status(400).json({ message: "The selected vehicle or load size is not supported." });
     }
     if (normalizedLoadSize === "CUSTOM" && !loadDescription?.trim()) {
@@ -346,6 +349,85 @@ export async function createTripRequest(req: AuthRequest, res: Response) {
 
     let status: RequestStatus = RequestStatus.SEARCHING;
     let scheduledDate: Date | null = null;
+    let tripEstimatedPrice: number;
+    let tripDistanceKm: number;
+    let tripVehicleType: string;
+    let tripLoadSize: string;
+    let tripPickupLat: number;
+    let tripPickupLng: number;
+    let tripDropoffLat: number;
+    let tripDropoffLng: number;
+    let tripLoadDescription: string | null;
+    let platformFeePercent: number;
+    let platformFeeAmount: number;
+    let driverNetEarning: number;
+    let tripExpiresAt: Date | null = null;
+
+    if (quoteId) {
+      // QUOTE-BASED PATH: Use locked quote data
+      const quote = await getValidQuote(quoteId, customerId);
+      if (!quote) {
+        return res.status(400).json({ message: "Quote not found, expired, or already used" });
+      }
+
+      // Verify quote data matches request (security check)
+      if (
+        quote.pickupLat !== coordinates[0] ||
+        quote.pickupLng !== coordinates[1] ||
+        quote.dropoffLat !== coordinates[2] ||
+        quote.dropoffLng !== coordinates[3] ||
+        quote.vehicleType !== normalizedVehicleType ||
+        quote.loadSize !== normalizedLoadSize
+      ) {
+        return res.status(400).json({ message: "Quote details do not match request" });
+      }
+
+      tripEstimatedPrice = quote.total;
+      tripDistanceKm = quote.distanceKm;
+      tripVehicleType = quote.vehicleType;
+      tripLoadSize = quote.loadSize;
+      tripPickupLat = quote.pickupLat;
+      tripPickupLng = quote.pickupLng;
+      tripDropoffLat = quote.dropoffLat;
+      tripDropoffLng = quote.dropoffLng;
+      tripLoadDescription = quote.loadDescription;
+      platformFeePercent = quote.platformFeePercent;
+      platformFeeAmount = quote.platformFeeAmount;
+      driverNetEarning = quote.driverNetEarning;
+      tripExpiresAt = quote.expiresAt;
+    } else {
+      // LEGACY PATH: Calculate price on the fly (backward compatibility)
+      if (estimatedPrice == null || distanceKm == null) {
+        return res.status(400).json({
+          message: "estimatedPrice and distanceKm are required when not using a quote",
+        });
+      }
+
+      const calculatedPrice = calculateTripPrice(normalizedVehicleType, normalizedLoadSize, calculatedDistanceKm);
+      if (calculatedPrice === null) {
+        return res.status(400).json({ message: "The selected vehicle or load size is not supported." });
+      }
+
+      // Verify the provided estimatedPrice matches calculated (prevent tampering)
+      if (Math.abs(calculatedPrice - estimatedPrice) > 1) {
+        return res.status(400).json({ message: "Provided estimatedPrice does not match calculated price" });
+      }
+
+      const financials = buildTripFinancials(calculatedPrice);
+
+      tripEstimatedPrice = calculatedPrice;
+      tripDistanceKm = calculatedDistanceKm;
+      tripVehicleType = normalizedVehicleType;
+      tripLoadSize = normalizedLoadSize;
+      tripPickupLat = coordinates[0];
+      tripPickupLng = coordinates[1];
+      tripDropoffLat = coordinates[2];
+      tripDropoffLng = coordinates[3];
+      tripLoadDescription = loadDescription?.trim() || null;
+      platformFeePercent = financials.platformFeePercent;
+      platformFeeAmount = financials.platformFeeAmount;
+      driverNetEarning = financials.driverNetEarning;
+    }
 
     if (scheduledFor) {
       const date = new Date(scheduledFor);
@@ -359,38 +441,53 @@ export async function createTripRequest(req: AuthRequest, res: Response) {
       status = RequestStatus.SCHEDULED;
     }
 
-    const financials = buildTripFinancials(calculatedPrice);
+    // Create trip with atomic quote marking
+    const trip = await prisma.$transaction(async (tx) => {
+      const createdTrip = await tx.transportRequest.create({
+        data: {
+          customerId,
+          pickupAddress,
+          pickupLat: tripPickupLat,
+          pickupLng: tripPickupLng,
+          dropoffAddress,
+          dropoffLat: tripDropoffLat,
+          dropoffLng: tripDropoffLng,
+          vehicleType: tripVehicleType,
+          loadDescription: tripLoadDescription,
+          loadSize: tripLoadSize,
+          specialNotes: specialNotes?.trim() || null,
+          estimatedPrice: tripEstimatedPrice,
+          distanceKm: tripDistanceKm,
+          status: status,
+          scheduledFor: scheduledDate,
+          searchStartedAt: status === RequestStatus.SEARCHING ? new Date() : null,
+          expiresAt: tripExpiresAt ?? (status === RequestStatus.SEARCHING ? getExpiryDate() : null),
+          paymentStatus: "UNPAID",
+          paymentMethod: paymentMethod === "MPESA" ? "MPESA" : "CASH",
+          senderName: senderName || null,
+          senderPhone: senderPhone || null,
+          recipientName: recipientName || null,
+          recipientPhone: recipientPhone || null,
+          platformFeePercent,
+          platformFeeAmount,
+          driverNetEarning,
+          quoteId: quoteId || null,
+        },
+        include: buildTripInclude(),
+      });
 
-    const trip = await prisma.transportRequest.create({
-      data: {
-        customerId,
-        pickupAddress,
-        pickupLat: coordinates[0],
-        pickupLng: coordinates[1],
-        dropoffAddress,
-        dropoffLat: coordinates[2],
-        dropoffLng: coordinates[3],
-        vehicleType: normalizedVehicleType,
-        loadDescription: loadDescription?.trim() || null,
-        loadSize: normalizedLoadSize,
-        specialNotes: specialNotes?.trim() || null,
-        estimatedPrice: calculatedPrice,
-        distanceKm: calculatedDistanceKm,
-        status: status,
-        scheduledFor: scheduledDate,
-        searchStartedAt: status === RequestStatus.SEARCHING ? new Date() : null,
-        expiresAt: status === RequestStatus.SEARCHING ? getExpiryDate() : null,
-        paymentStatus: "UNPAID",
-        paymentMethod: paymentMethod === "MPESA" ? "MPESA" : "CASH",
-        senderName: senderName || null,
-        senderPhone: senderPhone || null,
-        recipientName: recipientName || null,
-        recipientPhone: recipientPhone || null,
-        platformFeePercent: financials.platformFeePercent,
-        platformFeeAmount: financials.platformFeeAmount,
-        driverNetEarning: financials.driverNetEarning,
-      },
-      include: buildTripInclude(),
+      // Mark quote as used if provided
+      if (quoteId) {
+        await tx.quote.update({
+          where: { id: quoteId },
+          data: {
+            status: "USED",
+            usedAt: new Date(),
+          },
+        });
+      }
+
+      return createdTrip;
     });
 
     emitTripUpdated(req, trip);
