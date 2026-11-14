@@ -27,7 +27,6 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<PublicRole>("CUSTOMER");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -39,7 +38,6 @@ export default function RegisterScreen() {
     }
 
 
-    const usernameRegex = /^[a-zA-Z0-9_.]{3,20}$/;
 
     if (!phone.trim()) {
       Alert.alert("Missing phone", "Please enter your phone number.");
@@ -70,15 +68,7 @@ export default function RegisterScreen() {
       return false;
     }
 
-    if (!confirmPassword) {
-      Alert.alert("Missing confirmation", "Please confirm your password.");
-      return false;
-    }
 
-    if (password !== confirmPassword) {
-      Alert.alert("Password mismatch", "Passwords do not match.");
-      return false;
-    }
 
     return true;
   };
@@ -299,11 +289,7 @@ export default function RegisterScreen() {
           </View>
 
           <View style={styles.formGroup}>
-            <Text style={styles.label}>Confirm Password</Text>
-            <View style={styles.passwordWrapper}>
               <TextInput
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
                 placeholder="Confirm your password"
                 placeholderTextColor="#94A3B8"
                 style={styles.passwordInput}
@@ -349,7 +335,6 @@ export default function RegisterScreen() {
               Sign in
             </Link>
           </View>
-        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
