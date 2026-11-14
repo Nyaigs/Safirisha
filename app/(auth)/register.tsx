@@ -27,6 +27,7 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<PublicRole>("CUSTOMER");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -69,6 +70,11 @@ export default function RegisterScreen() {
     }
 
 
+
+    if (password !== confirmPassword) {
+      Alert.alert("Passwords do not match", "Please ensure both passwords match.");
+      return false;
+    }
 
     return true;
   };

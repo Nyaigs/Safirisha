@@ -388,7 +388,7 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.topRow}>
-          <TouchableOpacity style={styles.locationPill}>
+          <TouchableOpacity style={styles.locationPill} onPress={() => { setSearchField("pickup"); setSearchOpen(true); }}>
             <View style={styles.currentDot} />
             <Text style={styles.locationText} numberOfLines={1}>
               {currentLocation?.address?.split(",")[0] || "Current location"}
