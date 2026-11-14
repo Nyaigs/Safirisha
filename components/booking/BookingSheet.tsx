@@ -88,6 +88,53 @@ export function BookingSheet({ flow, currentLocation, loadingLocation, submittin
               <Text style={styles.actionTitle}>Handle with care</Text>
               <Switch value={flow.fragile} onValueChange={flow.setFragile} trackColor={{ true: design.colors.brand }} />
             </View>
+
+            {/* SENDER / RECIPIENT INFO */}
+            <View style={{ marginTop: design.spacing.md, paddingTop: design.spacing.md, borderTopWidth: 1, borderTopColor: design.colors.border }}>
+              <View style={styles.toggle}>
+                <Text style={styles.actionTitle}>Booking for someone else?</Text>
+                <Switch 
+                  value={flow.isForSomeoneElse} 
+                  onValueChange={flow.setIsForSomeoneElse} 
+                  trackColor={{ true: design.colors.brand }} 
+                />
+              </View>
+              
+              {flow.isForSomeoneElse && (
+                <View style={{ marginTop: design.spacing.sm }}>
+                  <TextInput 
+                    value={flow.senderName} 
+                    onChangeText={(t) => flow.setSenderDetails(t, flow.senderPhone)} 
+                    placeholder="Sender's Name (At Pickup)" 
+                    placeholderTextColor={design.colors.muted} 
+                    style={styles.input} 
+                  />
+                  <TextInput 
+                    value={flow.senderPhone} 
+                    onChangeText={(t) => flow.setSenderDetails(flow.senderName, t)} 
+                    placeholder="Sender's Phone Number" 
+                    placeholderTextColor={design.colors.muted} 
+                    keyboardType="phone-pad"
+                    style={styles.input} 
+                  />
+                  <TextInput 
+                    value={flow.recipientName} 
+                    onChangeText={(t) => flow.setRecipientDetails(t, flow.recipientPhone)} 
+                    placeholder="Recipient's Name (At Drop-off)" 
+                    placeholderTextColor={design.colors.muted} 
+                    style={styles.input} 
+                  />
+                  <TextInput 
+                    value={flow.recipientPhone} 
+                    onChangeText={(t) => flow.setRecipientDetails(flow.recipientName, t)} 
+                    placeholder="Recipient's Phone Number" 
+                    placeholderTextColor={design.colors.muted} 
+                    keyboardType="phone-pad"
+                    style={styles.input} 
+                  />
+                </View>
+              )}
+            </View>
           </>
         )}
 

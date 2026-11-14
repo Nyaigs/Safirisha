@@ -16,6 +16,11 @@ export type BookingDraft = {
   loadSize: LoadSize | null;
   vehicle: VehicleId | null;
   paymentMethod: PaymentMethod;
+  isForSomeoneElse: boolean;
+  senderName: string;
+  senderPhone: string;
+  recipientName: string;
+  recipientPhone: string;
 };
 
 export const INITIAL_BOOKING_DRAFT: BookingDraft = {
@@ -29,6 +34,11 @@ export const INITIAL_BOOKING_DRAFT: BookingDraft = {
   loadSize: null,
   vehicle: null,
   paymentMethod: "CASH",
+  isForSomeoneElse: false,
+  senderName: "",
+  senderPhone: "",
+  recipientName: "",
+  recipientPhone: "",
 };
 
 export function toLocationPoint(location: AppLocation): LocationPoint {
@@ -95,6 +105,10 @@ export type TripRequestDraft = {
   estimatedPrice: number;
   distanceKm: number;
   paymentMethod: PaymentMethod;
+  senderName: string;
+  senderPhone: string;
+  recipientName: string;
+  recipientPhone: string;
 };
 
 export function buildRequestPayload(
@@ -120,5 +134,9 @@ export function buildRequestPayload(
     estimatedPrice,
     distanceKm,
     paymentMethod: draft.paymentMethod,
+    senderName: draft.isForSomeoneElse ? draft.senderName : "",
+    senderPhone: draft.isForSomeoneElse ? draft.senderPhone : "",
+    recipientName: draft.isForSomeoneElse ? draft.recipientName : "",
+    recipientPhone: draft.isForSomeoneElse ? draft.recipientPhone : "",
   };
 }

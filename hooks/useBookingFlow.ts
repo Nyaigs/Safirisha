@@ -31,6 +31,9 @@ export function useBookingFlow() {
   const setLoadSize = useCallback((loadSize: LoadSize | null) => setDraft((current) => ({ ...current, loadSize, vehicle: null })), []);
   const setVehicle = useCallback((vehicle: VehicleId | null) => setDraft((current) => ({ ...current, vehicle })), []);
   const setPaymentMethod = useCallback((paymentMethod: PaymentMethod) => setDraft((current) => ({ ...current, paymentMethod })), []);
+  const setIsForSomeoneElse = useCallback((isForSomeoneElse: boolean) => setDraft((current) => ({ ...current, isForSomeoneElse })), []);
+  const setSenderDetails = useCallback((senderName: string, senderPhone: string) => setDraft((current) => ({ ...current, senderName, senderPhone })), []);
+  const setRecipientDetails = useCallback((recipientName: string, recipientPhone: string) => setDraft((current) => ({ ...current, recipientName, recipientPhone })), []);
 
   const distanceKm = useMemo(() => pickup && dropoff ? distanceBetweenKm(pickup, dropoff) : 0, [pickup, dropoff]);
   const suitableVehicleIds = useMemo(() => {
@@ -54,5 +57,13 @@ export function useBookingFlow() {
     [draft, selectedVehicle, distanceKm, estimatedPrice],
   );
 
-  return { step, setStep, pickup, dropoff, category, setCategory, description, setDescription, notes, setNotes, fragile, setFragile, loadSize, setLoadSize, vehicle, setVehicle, selectedVehicle, recommendedVehicle, suitableVehicleIds, estimatedPrice, distanceKm, choosePickup, chooseDropoff, back, requestPayload, loadSizeInfo: getLoadSizeByKey(loadSize), hasValidLoadDescription: validLoadDescription };
+  return { step, setStep, pickup, dropoff, category, setCategory, description, setDescription, notes, setNotes, fragile, setFragile, loadSize, setLoadSize, vehicle, setVehicle, selectedVehicle, recommendedVehicle, suitableVehicleIds, estimatedPrice, distanceKm, choosePickup, chooseDropoff, back, requestPayload, loadSizeInfo: getLoadSizeByKey(loadSize), hasValidLoadDescription: validLoadDescription, isForSomeoneElse: draft.isForSomeoneElse,
+    setIsForSomeoneElse,
+    senderName: draft.senderName,
+    senderPhone: draft.senderPhone,
+    recipientName: draft.recipientName,
+    recipientPhone: draft.recipientPhone,
+    setSenderDetails,
+    setRecipientDetails,
+  };
 }

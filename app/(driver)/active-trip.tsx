@@ -12,6 +12,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Platform,
 } from "react-native";
 import * as Location from "expo-location";
 import MapView, { Marker, Polyline } from "../../components/ui/map-view";
