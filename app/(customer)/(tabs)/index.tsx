@@ -140,7 +140,8 @@ export default function HomeScreen() {
         latitude: result.coords.latitude,
         longitude: result.coords.longitude,
         address:
-          [place?.name, place?.street, place?.district, place?.city].filter(Boolean).join(", ") ||
+          [place?.street, place?.district, place?.city].filter(Boolean).join(", ") ||
+          place?.name ||
           "Current location",
       };
       setCurrentLocation(point);
@@ -188,7 +189,7 @@ export default function HomeScreen() {
       try {
         const [place] = await Location.reverseGeocodeAsync(point);
         point.address =
-          [place?.name, place?.street, place?.district, place?.city].filter(Boolean).join(", ") ||
+          [place?.street, place?.district, place?.city].filter(Boolean).join(", ") || place?.name ||
           point.address;
       } catch {
         /* keep pin label */
