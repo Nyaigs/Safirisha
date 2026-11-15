@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { design } from "../../constants/design";
 import { maps } from "../../lib/maps";
 import { AppLocation, DropoffPlace } from "../../types";
+import { usePlacesStore } from "../../store/places";
 
 type SearchResult = DropoffPlace & { distanceKm?: number };
 
@@ -32,12 +33,6 @@ type Props = {
   onUseCurrentLocation: () => Promise<AppLocation | null>;
   onPickOnMap: (kind: "pickup" | "dropoff") => void;
 };
-
-const QUICK_PLACES = [
-  { label: "Add Home", icon: "home-outline" as const },
-  { label: "Add Work", icon: "briefcase-outline" as const },
-  { label: "Saved places", icon: "star-outline" as const },
-];
 
 export function LocationSearchOverlay({
   visible,
@@ -60,6 +55,8 @@ export function LocationSearchOverlay({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const places = usePlacesStore();
+  const [savingMode, setSavingMode] = useState<"home" | "work" | null>(null);
   const requestIdRef = useRef(0);
 
   useEffect(() => {
@@ -137,6 +134,12 @@ export function LocationSearchOverlay({
 
   const handleSelect = (place: SearchResult) => {
     const point: AppLocation = { ...place, placeId: place.id };
+    
+    // Save if we are in saving mode
+    if (savingMode === "home") places.setHome(point);
+    if (savingMode === "work") places.setWork(point);
+    setSavingMode(null);
+
     // Close modal FIRST so its dismissal animation plays before the
     // sheet behind it advances to the next step. Prevents the flash.
     onClose();
@@ -159,6 +162,23 @@ export function LocationSearchOverlay({
   const handlePickOnMap = () => {
     onClose();
     onPickOnMap(activeField);
+  };
+
+  const handleQuickPlace = (type: "home" | "work") => {
+    const saved = type === "home" ? places.home : places.work;
+    if (saved) {
+      const point: AppLocation = { ...saved };
+      onClose();
+      setTimeout(() => {
+        if (activeField === "pickup") onSelectPickup(point);
+        else onSelectDropoff(point);
+      }, 260);
+    } else {
+      setSavingMode(type);
+      setActiveField("dropoff");
+      setPickupQuery("");
+      setDropoffQuery("");
+    }
   };
 
   return (
@@ -236,14 +256,34 @@ export function LocationSearchOverlay({
           </TouchableOpacity>
         </View>
 
+        {/* Saving Mode Banner */}
+        {savingMode && (
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", backgroundColor: design.colors.subtle, padding: 12, borderRadius: 12, marginBottom: 12, borderWidth: 1, borderColor: design.colors.brand }}>
+            <Text style={{ color: design.colors.brand, fontWeight: "600", flex: 1 }}>
+              Search for your {savingMode === "home" ? "Home" : "Work"} address below...
+            </Text>
+            <TouchableOpacity onPress={() => setSavingMode(null)} style={{ padding: 4 }}>
+              <Ionicons name="close" size={20} color={design.colors.brand} />
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Quick chips */}
         <View style={styles.quickRow}>
-          {QUICK_PLACES.map((item) => (
-            <TouchableOpacity key={item.label} style={styles.quickChip}>
-              <Ionicons name={item.icon} size={16} color={design.colors.brand} />
-              <Text style={styles.quickChipText}>{item.label}</Text>
-            </TouchableOpacity>
-          ))}
+          <TouchableOpacity style={styles.quickChip} onPress={() => handleQuickPlace("home")}>
+            <Ionicons name="home-outline" size={16} color={design.colors.brand} />
+            <Text style={styles.quickChipText}>{places.home ? "Home" : "Add Home"}</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.quickChip} onPress={() => handleQuickPlace("work")}>
+            <Ionicons name="briefcase-outline" size={16} color={design.colors.brand} />
+            <Text style={styles.quickChipText}>{places.work ? "Work" : "Add Work"}</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.quickChip}>
+            <Ionicons name="star-outline" size={16} color={design.colors.brand} />
+            <Text style={styles.quickChipText}>Saved places</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Shortcuts */}
@@ -331,11 +371,12 @@ const styles = StyleSheet.create({
   },
   card: {
     flex: 1,
-    borderWidth: 2,
-    borderColor: design.colors.ink,
-    borderRadius: design.radius.lg,
-    paddingVertical: 4,
-    paddingHorizontal: design.spacing.sm,
+    borderWidth: 1,
+    borderColor: design.colors.border,
+    borderRadius: design.radius.pill || 30,
+    paddingVertical: 6,
+    paddingHorizontal: design.spacing.md,
+    backgroundColor: design.colors.subtle,
   },
   cardRowInner: { flexDirection: "row", alignItems: "stretch" },
   markerCol: {
@@ -364,9 +405,9 @@ const styles = StyleSheet.create({
   },
   inputsCol: { flex: 1 },
   cardInput: {
-    ...design.typography.body,
+    fontSize: 16,
     color: design.colors.ink,
-    paddingVertical: 14,
+    paddingVertical: 12,
   },
   inputDivider: { height: 1, backgroundColor: design.colors.border },
 
@@ -384,9 +425,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: design.radius.md,
+    borderRadius: design.radius.pill || 30,
     borderWidth: 1,
     borderColor: design.colors.border,
     backgroundColor: "#fff",
