@@ -43,18 +43,18 @@ export async function bootstrapSuperAdmin() {
     return;
   }
 
-  if (!existing.isSuperAdmin || existing.role !== "ADMIN") {
-    await prisma.user.update({
-      where: { id: existing.id },
-      data: {
-        role: "ADMIN",
-        isSuperAdmin: true,
-        isActive: true,
-        suspensionReason: null,
-        suspendedAt: null,
-      },
-    });
+  // Always sync the password and role to ensure .env credentials work
+  await prisma.user.update({
+    where: { id: existing.id },
+    data: {
+      passwordHash,
+      role: "ADMIN",
+      isSuperAdmin: true,
+      isActive: true,
+      suspensionReason: null,
+      suspendedAt: null,
+    },
+  });
 
-    console.log("Existing account promoted to super admin");
-  }
+  console.log("Super admin credentials synced from .env");
 }
