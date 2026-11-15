@@ -251,9 +251,6 @@ export function LocationSearchOverlay({
             </View>
           </View>
 
-          <TouchableOpacity style={styles.addBtn}>
-            <Ionicons name="add" size={22} color={design.colors.ink} />
-          </TouchableOpacity>
         </View>
 
         {/* Saving Mode Banner */}
@@ -278,11 +275,6 @@ export function LocationSearchOverlay({
           <TouchableOpacity style={styles.quickChip} onPress={() => handleQuickPlace("work")}>
             <Ionicons name="briefcase-outline" size={16} color={design.colors.brand} />
             <Text style={styles.quickChipText}>{places.work ? "Work" : "Add Work"}</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.quickChip}>
-            <Ionicons name="star-outline" size={16} color={design.colors.brand} />
-            <Text style={styles.quickChipText}>Saved places</Text>
           </TouchableOpacity>
         </View>
 
@@ -411,14 +403,6 @@ const styles = StyleSheet.create({
   },
   inputDivider: { height: 1, backgroundColor: design.colors.border },
 
-  addBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: design.colors.subtle,
-    alignItems: "center",
-    justifyContent: "center",
-  },
 
   quickRow: { flexDirection: "row", gap: design.spacing.xs, marginBottom: design.spacing.md },
   quickChip: {
