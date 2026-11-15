@@ -186,21 +186,9 @@ export function BookingSheet({ flow, currentLocation, loadingLocation, submittin
               <View style={styles.summary}>
                 <Text style={styles.actionTitle}>{VEHICLES.find((item) => item.id === flow.selectedVehicle)?.name} · {flow.loadSize}</Text>
                 <Text style={styles.actionMeta}>{flow.description || flow.category || "General delivery"}{flow.fragile ? " · Fragile" : ""}</Text>
-                <Text style={styles.actionMeta}>Base fare · KES {breakdown.baseFare.toLocaleString()}</Text>
-                <Text style={styles.actionMeta}>Distance ({flow.distanceKm} km) · KES {breakdown.distanceCharge.toLocaleString()}</Text>
-                {breakdown.loadAdjustment > 0 && (
-                  <Text style={styles.actionMeta}>Load adjustment · KES {breakdown.loadAdjustment.toLocaleString()}</Text>
-                )}
-                {breakdown.fragileAdjustment > 0 && (
-                  <Text style={styles.actionMeta}>Handle with care · +KES {breakdown.fragileAdjustment.toLocaleString()}</Text>
-                )}
-                {breakdown.surgeMultiplier > 1 && (
-                  <Text style={styles.actionMeta}>{breakdown.surgeReason} · ×{breakdown.surgeMultiplier.toFixed(2)} · +KES {breakdown.surgeAdjustment.toLocaleString()}</Text>
-                )}
-                {breakdown.appliedMinFare && (
-                  <Text style={styles.actionMeta}>Minimum fare applied</Text>
-                )}
-                <Text style={styles.total}>Estimated total · KES {breakdown.total.toLocaleString()}</Text>
+                <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: design.colors.border }}>
+                  <Text style={styles.total}>Estimated total · KES {breakdown.total.toLocaleString()}</Text>
+                </View>
               </View>
               <TouchableOpacity onPress={flow.back} style={styles.edit}>
                 <Text style={styles.mapActionText}>Edit request</Text>

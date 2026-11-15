@@ -190,7 +190,7 @@ export function LocationSearchOverlay({
     >
       <KeyboardAvoidingView
         style={[styles.container, { paddingTop: insets.top + 8 }]}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         {/* Header */}
         <View style={styles.header}>
@@ -214,14 +214,11 @@ export function LocationSearchOverlay({
         </View>
 
         {/* Bolt-style location card */}
-        <View style={styles.cardRow}>
+        <View style={{ gap: 8, marginBottom: design.spacing.md }}>
           <View style={styles.card}>
-            {/* Pickup row */}
             <View style={styles.cardRowInner}>
               <View style={styles.markerCol}>
                 <View style={styles.pickupDot} />
-                <View style={styles.connector} />
-                <View style={styles.dropoffSquare} />
               </View>
               <View style={styles.inputsCol}>
                 <TextInput
@@ -235,7 +232,16 @@ export function LocationSearchOverlay({
                   placeholderTextColor={design.colors.muted}
                   style={styles.cardInput}
                 />
-                <View style={styles.inputDivider} />
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.card}>
+            <View style={styles.cardRowInner}>
+              <View style={styles.markerCol}>
+                <View style={styles.dropoffSquare} />
+              </View>
+              <View style={styles.inputsCol}>
                 <TextInput
                   value={dropoffQuery}
                   onChangeText={(text) => {
@@ -250,7 +256,6 @@ export function LocationSearchOverlay({
               </View>
             </View>
           </View>
-
         </View>
 
         {/* Saving Mode Banner */}
