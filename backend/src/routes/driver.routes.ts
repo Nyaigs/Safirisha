@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { Router } from "express";
 import multer from "multer";
 import path from "path";
@@ -17,6 +18,8 @@ import { authorizeRoles } from "../middleware/role.middleware";
 
 const router = Router();
 
+const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     if (file.fieldname === "vehicleImage") {
@@ -28,13 +31,23 @@ const storage = multer.diskStorage({
     }
   },
   filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
-    cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
+    // SECURITY (C-07): Ignore original filename completely. Use UUID.
+    const ext = path.extname(path.basename(file.originalname)).toLowerCase();
+    const uuid = crypto.randomUUID();
+    cb(null, `${file.fieldname}-${uuid}${ext}`);
   },
 });
 
-const upload = multer({ storage });
+const upload = multer({ 
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: (req, file, cb) => {
+    if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+      return cb(new Error("Only JPG, PNG, WEBP, and PDF files are allowed"));
+    }
+    cb(null, true);
+  }
+});
 
 router.use(authenticate);
 router.use(authorizeRoles("DRIVER"));
