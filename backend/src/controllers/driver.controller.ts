@@ -192,7 +192,7 @@ export async function updateDriverLocation(req: AuthRequest, res: Response) {
     const driver = await prisma.driverProfile.findUnique({ where: { userId } });
     if (!driver) return res.status(404).json({ message: "Driver not found" });
     if (!hasValidCoordinates(lat, lng)) return res.status(400).json({ message: "A valid latitude and longitude are required" });
-    if (heading != null && (typeof heading !== "number" || !Number.isFinite(heading))) return res.status(400).json({ message: "Heading must be a valid number" });
+    if (heading != null && (typeof heading !== "number" || !Number.isFinite(heading) || heading < 0 || heading > 360)) return res.status(400).json({ message: "Heading must be a valid number between 0 and 360" });
     if (speed != null && (typeof speed !== "number" || !Number.isFinite(speed) || speed < 0)) return res.status(400).json({ message: "Speed must be a valid non-negative number" });
 
     const updated = await prisma.driverProfile.update({

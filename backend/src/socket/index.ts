@@ -98,10 +98,21 @@ async function resolveSocketUser(token?: string): Promise<SocketUser | null> {
 }
 
 export function initSocket(server: HttpServer) {
+  const allowedOrigins = process.env.CORS_ALLOWED_ORIGINS
+    ? process.env.CORS_ALLOWED_ORIGINS.split(",").map(o => o.trim())
+    : ["http://localhost:8081", "https://safirisha.onrender.com", "http://localhost:19006"];
+
   io = new Server(server, {
     cors: {
-      origin: "*",
+      origin: (origin, callback) => {
+        if (!origin || allowedOrigins.includes(origin)) {
+          callback(null, true);
+        } else {
+          callback(new Error("Origin not allowed by Socket CORS"));
+        }
+      },
       methods: ["GET", "POST", "PATCH"],
+      credentials: true,
     },
   });
 
