@@ -14,6 +14,7 @@ type SocketUser = {
   role: string;
   authProvider: "legacy" | "clerk";
   clerkUserId?: string;
+  driverProfileId?: string | null;
 };
 
 let io: Server | null = null;

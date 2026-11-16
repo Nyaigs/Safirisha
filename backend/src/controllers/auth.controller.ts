@@ -258,6 +258,10 @@ export async function login(req: Request, res: Response) {
       });
     }
 
+    if (!user) {
+      return res.status(500).json({ message: "Failed to create user" });
+    }
+
     const token = signToken(user.id, user.role);
 
     return res.json({
@@ -290,7 +294,7 @@ export async function clerkBootstrap(req: AuthRequest, res: Response) {
     // SECURITY (C-14): Never trust req.body.role for privilege escalation.
     // All Clerk sign-ups default to CUSTOMER. Drivers must go through KYC.
     // Admins are created ONLY via the bootstrapSuperAdmin script using env vars.
-    const requestedRole = "CUSTOMER";
+    const requestedRole: string = "CUSTOMER";
 
     const clerkUser = await clerkClient.users.getUser(clerkUserId);
 
@@ -337,18 +341,8 @@ export async function clerkBootstrap(req: AuthRequest, res: Response) {
           email: safeEmail,
           phone: safePhone,
           passwordHash: "",
-          role: requestedRole,
+          role: "CUSTOMER",
           isActive: true,
-          ...(requestedRole === "DRIVER"
-            ? {
-                driverProfile: {
-                  create: {
-                    approvalStatus: "PENDING",
-                    availability: "OFFLINE",
-                  },
-                },
-              }
-            : {}),
         },
         include: {
           driverProfile: true,
