@@ -82,6 +82,7 @@ async function resolveSocketUser(token?: string): Promise<SocketUser | null> {
 
     const user = await prisma.user.findUnique({
       where: { id: decoded.id },
+      include: { driverProfile: { select: { id: true } } },
     });
 
     if (!user?.isActive) return null;
@@ -91,6 +92,7 @@ async function resolveSocketUser(token?: string): Promise<SocketUser | null> {
       role: user.role,
       authProvider: "legacy",
       clerkUserId: user.clerkId ?? undefined,
+      driverProfileId: user.driverProfile?.id,
     };
   } catch {
     return null;
@@ -171,12 +173,8 @@ export function initSocket(server: HttpServer) {
       if (!trip) return;
 
       const isCustomer = trip.customerId === user.id;
-      const isDriver = trip.assignedDriverId
-        ? (await prisma.driverProfile.findUnique({
-            where: { id: trip.assignedDriverId },
-            select: { userId: true },
-          }))?.userId === user.id
-        : false;
+      // C-06 FIX: Use the cached driverProfileId instead of hitting the DB again
+      const isDriver = trip.assignedDriverId === user.driverProfileId;
       const isAdmin = user.role === "ADMIN";
 
       if (isCustomer || isDriver || isAdmin) {
