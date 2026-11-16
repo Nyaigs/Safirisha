@@ -449,10 +449,24 @@ export default function DriverDashboard() {
           job={incomingJob}
           accepting={accepting}
           onAccept={async (id) => {
+            if (accepting) return;
             setAccepting(true);
-            setIncomingJob(null);
-            router.push(`/(driver)/active-trip?tripId=${id}`);
-            setTimeout(() => setAccepting(false), 1000);
+            try {
+              // 1. Tell the backend to assign this trip to the driver
+              await apiFetch(`/trips/${id}/accept`, { method: "POST" });
+              
+              // 2. Clear the ping and navigate ONLY if successful
+              setIncomingJob(null);
+              router.push(`/(driver)/active-trip?tripId=${id}`);
+            } catch (error: any) {
+              Alert.alert(
+                "Could not accept trip", 
+                error?.message || "Someone else might have taken it, or you went offline."
+              );
+              setIncomingJob(null); // Hide the ping if it failed
+            } finally {
+              setAccepting(false);
+            }
           }}
           onDecline={() => setIncomingJob(null)}
         />

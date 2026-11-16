@@ -55,7 +55,7 @@ async function resolveAuthIdentity(req: Request): Promise<AuthIdentity | null> {
   if (!jwtSecret) return null;
 
   try {
-    const decoded = jwt.verify(token, jwtSecret) as JwtPayload;
+    const decoded = jwt.verify(token, jwtSecret, { algorithms: ["HS256"] }) as JwtPayload;
     return {
       authProvider: "legacy",
       legacyUserId: decoded.id,

@@ -38,7 +38,7 @@ export async function resolveUserFromToken(token?: string) {
   if (!jwtSecret) return null;
 
   try {
-    const decoded = jwt.verify(token, jwtSecret) as LegacyPayload;
+    const decoded = jwt.verify(token, jwtSecret, { algorithms: ["HS256"] }) as LegacyPayload;
 
     const user = await prisma.user.findUnique({
       where: { id: decoded.id },

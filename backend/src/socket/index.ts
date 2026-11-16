@@ -78,7 +78,7 @@ async function resolveSocketUser(token?: string): Promise<SocketUser | null> {
   if (!jwtSecret) return null;
 
   try {
-    const decoded = jwt.verify(token, jwtSecret) as LegacyJwtPayload;
+    const decoded = jwt.verify(token, jwtSecret, { algorithms: ["HS256"] }) as LegacyJwtPayload;
 
     const user = await prisma.user.findUnique({
       where: { id: decoded.id },

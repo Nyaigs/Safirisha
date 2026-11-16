@@ -20,7 +20,7 @@ function signToken(id: string, role: string) {
   }
 
   return jwt.sign({ id, role }, secret, {
-    expiresIn: "7d",
+    expiresIn: "12h",
   });
 }
 
