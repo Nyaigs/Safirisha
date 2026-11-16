@@ -45,7 +45,7 @@ function createSocket() {
           console.log("[SOCKET] auth handshake — token length:", token.length);
           cb({ token });
         } else {
-          console.error("[SOCKET] auth failed — no token available");
+          console.warn("[SOCKET] No token yet. Waiting for user to authenticate...");
           // Do not call cb() with empty token, let it timeout and retry
         }
       });

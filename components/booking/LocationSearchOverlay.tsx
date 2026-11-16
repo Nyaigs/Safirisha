@@ -360,12 +360,6 @@ const styles = StyleSheet.create({
   },
   chipText: { ...design.typography.caption, color: design.colors.ink, fontWeight: "600" },
 
-  cardRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: design.spacing.sm,
-    marginBottom: design.spacing.md,
-  },
   card: {
     flex: 1,
     borderWidth: 1,
@@ -388,12 +382,6 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: design.colors.brand,
   },
-  connector: {
-    flex: 1,
-    width: 2,
-    backgroundColor: design.colors.ink,
-    marginVertical: 2,
-  },
   dropoffSquare: {
     width: 12,
     height: 12,
@@ -406,7 +394,6 @@ const styles = StyleSheet.create({
     color: design.colors.ink,
     paddingVertical: 12,
   },
-  inputDivider: { height: 1, backgroundColor: design.colors.border },
 
 
   quickRow: { flexDirection: "row", gap: design.spacing.xs, marginBottom: design.spacing.md },
