@@ -287,10 +287,10 @@ export async function clerkBootstrap(req: AuthRequest, res: Response) {
       });
     }
 
-    const requestedRole =
-      req.body?.role === "DRIVER" || req.body?.role === "ADMIN"
-        ? req.body.role
-        : "CUSTOMER";
+    // SECURITY (C-14): Never trust req.body.role for privilege escalation.
+    // All Clerk sign-ups default to CUSTOMER. Drivers must go through KYC.
+    // Admins are created ONLY via the bootstrapSuperAdmin script using env vars.
+    const requestedRole = "CUSTOMER";
 
     const clerkUser = await clerkClient.users.getUser(clerkUserId);
 
