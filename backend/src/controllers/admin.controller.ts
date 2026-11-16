@@ -1,3 +1,4 @@
+import { getIO } from "../socket";
 import { DriverApprovalStatus, UserRole } from "@prisma/client";
 import bcrypt from "bcrypt";
 import { Response } from "express";
@@ -725,6 +726,16 @@ export async function suspendUser(req: AuthRequest, res: Response) {
         where: { id: existingUser.driverProfile.id },
         data: { availability: "OFFLINE" },
       });
+    }
+
+    // SECURITY (C-15): Force disconnect the user's active socket connections
+    try {
+      const io = getIO();
+      if (io) {
+        io.in(`user:${userId}`).disconnectSockets(true);
+      }
+    } catch (socketError) {
+      console.warn("Failed to disconnect suspended user socket:", socketError);
     }
 
     emitAdminStatsUpdated(req);
