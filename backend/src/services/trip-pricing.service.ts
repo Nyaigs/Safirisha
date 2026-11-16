@@ -11,11 +11,11 @@ const MAX_SURGE = 1.5;
 type VehicleRates = { base: number; perKm: number; perMin: number; minFare: number };
 
 const VEHICLE_RATES: Record<string, VehicleRates> = {
-  BIKE:         { base: 100,  perKm: 30,  perMin: 2,  minFare: 150 },
-  TUKTUK:       { base: 200,  perKm: 45,  perMin: 4,  minFare: 300 },
-  PICKUP:       { base: 600,  perKm: 75,  perMin: 6,  minFare: 800 },
-  MEDIUM_LORRY: { base: 1500, perKm: 120, perMin: 10, minFare: 2000 },
-  LARGE_TRUCK:  { base: 1500, perKm: 120, perMin: 10, minFare: 2000 },
+  BIKE:         { base: 80,   perKm: 25,  perMin: 1.5, minFare: 120 },
+  TUKTUK:       { base: 150,  perKm: 35,  perMin: 3,   minFare: 250 },
+  PICKUP:       { base: 400,  perKm: 45,  perMin: 4,   minFare: 600 },
+  MEDIUM_LORRY: { base: 1000, perKm: 80,  perMin: 8,   minFare: 1500 },
+  LARGE_TRUCK:  { base: 1000, perKm: 80,  perMin: 8,   minFare: 1500 },
 };
 
 const LOAD_MULTIPLIERS: Record<string, number> = {
