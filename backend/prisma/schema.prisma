@@ -27,6 +27,7 @@ model User {
   passwordResetCodeExpiresAt DateTime?
   passwordResetVerified      Boolean            @default(false)
   clerkId                    String?            @unique
+  expoPushToken              String?
   driverProfile              DriverProfile?
   customerRequests           TransportRequest[] @relation("CustomerRequests")
   ratingsGiven               TripRating[]       @relation("CustomerRatings")
