@@ -14,7 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import MapView, { Marker, Polyline } from "../../components/ui/map-view";
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from "../../components/ui/map-view";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { ListSkeleton } from "../../components/ui/skeleton";
 import { design } from "../../constants/design";
@@ -549,7 +549,7 @@ export default function LiveTripScreen() {
 
   return (
     <View style={styles.container}>
-      <MapView ref={mapRef} style={styles.map} initialRegion={mapRegion} showsUserLocation={false} showsMyLocationButton={false}>
+      <MapView ref={mapRef} provider={PROVIDER_GOOGLE} style={styles.map} initialRegion={mapRegion} showsUserLocation={false} showsMyLocationButton={false}>
         <Marker coordinate={{ latitude: trip.pickupLat, longitude: trip.pickupLng }} title="Pickup" description={trip.pickupAddress}>
           <View style={styles.pickupMarker}><Ionicons name="arrow-up" size={16} color={design.colors.white} /></View>
         </Marker>

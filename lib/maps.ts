@@ -171,24 +171,51 @@ export class GeoapifyProvider implements MapsProvider {
 
 export class GoogleProvider implements MapsProvider {
   private readonly key = process.env.EXPO_PUBLIC_GOOGLE_MAPS_KEY;
+  private readonly geoapify = new GeoapifyProvider(); // Delegate routing to Geoapify for $0 cost
 
-  private unavailable(): Error {
-    return new Error(this.key
-      ? "Google Maps provider is a stub and does not make network requests yet."
-      : "Google Maps is not configured: EXPO_PUBLIC_GOOGLE_MAPS_KEY is missing.");
+  private requireKey(): string {
+    if (!this.key) throw new Error("Google Maps is not configured: EXPO_PUBLIC_GOOGLE_MAPS_KEY is missing.");
+    return this.key;
   }
 
-  async searchPlaces(_query: string, _bias?: { lat: number; lng: number }): Promise<PlaceResult[]> {
-    throw this.unavailable();
+  async searchPlaces(query: string, bias?: { lat: number; lng: number }): Promise<PlaceResult[]> {
+    const key = this.requireKey();
+    let url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(query.trim())}&components=country:KE&key=${key}`;
+    if (bias) url += `&bounds=${bias.lat - 0.1},${bias.lng - 0.1}|${bias.lat + 0.1},${bias.lng + 0.1}`;
+
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Google search failed (${response.status}).`);
+    const data = await response.json();
+    
+    if (!data.results) return [];
+
+    return data.results.slice(0, 5).map((result: any) => ({
+      id: result.place_id,
+      name: result.formatted_address.split(',')[0],
+      address: result.formatted_address,
+      latitude: result.geometry.location.lat,
+      longitude: result.geometry.location.lng,
+    }));
   }
 
-  async reverseGeocode(_lat: number, _lng: number): Promise<string> {
-    throw this.unavailable();
+  async reverseGeocode(lat: number, lng: number): Promise<string> {
+    const key = this.requireKey();
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${key}`;
+    
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Google reverse geocode failed (${response.status}).`);
+    const data = await response.json();
+    
+    return data.results?.[0]?.formatted_address || "Pinned location";
   }
 
-  async getRoute(_origin: { lat: number; lng: number }, _destination: { lat: number; lng: number }, _options?: { retries?: number; delayMs?: number }): Promise<RouteResult | null> {
-    throw this.unavailable();
+  async getRoute(
+    origin: { lat: number; lng: number }, 
+    destination: { lat: number; lng: number },
+    options?: { retries?: number; delayMs?: number }
+  ): Promise<RouteResult | null> {
+    return this.geoapify.getRoute(origin, destination, options);
   }
 }
 
-export const maps: MapsProvider = new GeoapifyProvider();
+export const maps: MapsProvider = new GoogleProvider();

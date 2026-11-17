@@ -1,4 +1,17 @@
 import "dotenv/config";
+
+// SENTRY_INIT_APK_BACKEND — crash reporting for the beta
+import * as Sentry from "@sentry/node";
+import { nodeProfilingIntegration } from "@sentry/profiling-node";
+
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    integrations: [nodeProfilingIntegration()],
+    tracesSampleRate: 0.1,
+    profilesSampleRate: 0.1,
+  });
+}
 import fs from "fs";
 import http from "http";
 import cron from "node-cron";

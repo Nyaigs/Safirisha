@@ -1,3 +1,14 @@
+// SENTRY_INIT_APK
+import * as Sentry from "@sentry/react-native";
+
+if (process.env.EXPO_PUBLIC_SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+    tracesSampleRate: 0.1,
+    enableAutoSessionTracking: true,
+  });
+}
+
 import { ClerkProvider, useAuth } from "@clerk/expo";
 import { tokenCache } from "@clerk/expo/token-cache";
 import { Stack } from "expo-router";
