@@ -800,6 +800,19 @@ export async function acceptTripRequest(req: AuthRequest, res: Response) {
       },
     });
 
+    // H06_NOTIFICATION_PERSISTED — write inbox row (push + inbox are separate channels)
+    try {
+      await createNotification({
+        userId: updatedTrip.customerId,
+        type: "trip_accepted",
+        title: "Driver Found! 🚚",
+        message: `${driver.user.fullName} (${driver.plateNumber}) is on the way to pick up your goods.`,
+        tripId: updatedTrip.id,
+      });
+    } catch (notifError) {
+      console.warn("Failed to persist notification on accept:", notifError);
+    }
+
     // H-06: Fire Push Notification to the Customer
     try {
       const customer = await prisma.user.findUnique({
