@@ -426,7 +426,7 @@ export async function updateMe(req: AuthRequest, res: Response) {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    const { fullName, username, email, phone } = req.body;
+    const { fullName, username, email, phone, expoPushToken } = req.body;
 
     if (phone) {
       const phoneRegex = /^\+?254[17]\d{8}$/;
@@ -437,6 +437,10 @@ export async function updateMe(req: AuthRequest, res: Response) {
 
 
     const updateData: Record<string, unknown> = {};
+
+    if (expoPushToken !== undefined) {
+      updateData.expoPushToken = String(expoPushToken).trim();
+    }
 
     if (fullName !== undefined) {
       if (typeof fullName !== "string" || !fullName.trim()) {
