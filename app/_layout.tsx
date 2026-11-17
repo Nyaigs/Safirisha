@@ -11,6 +11,9 @@ import {
 import { disconnectSocket, setTokenProvider } from "../lib/socket";
 import { setLogoutHandler } from "../lib/api";
 import { useAuthStore } from "../store/auth";
+import { registerForPushNotificationsAsync } from "../lib/notifications";
+import * as Notifications from "expo-notifications";
+import { router as expoRouter } from "expo-router";
 
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
@@ -85,12 +88,39 @@ function ClerkTokenBridge() {
     }
   }, [authMode, isLoaded, isSignedIn, logout]);
 
+  // H06_PUSH_REGISTRATION_EFFECT — fire once when session becomes authenticated
+  useEffect(() => {
+    if (isLoaded && isSignedIn) {
+      void registerForPushNotificationsAsync();
+    }
+  }, [isLoaded, isSignedIn]);
+
+  return null;
+}
+
+// H06_PUSH_TAP_LISTENER — deep-link into live-trip when push is tapped
+function PushTapListener() {
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener((resp) => {
+      const data = resp?.notification?.request?.content?.data as
+        | { screen?: string; tripId?: string }
+        | undefined;
+      if (data?.screen === "live-trip" && data.tripId) {
+        expoRouter.push({
+          pathname: "/(customer)/live-trip",
+          params: { tripId: data.tripId },
+        });
+      }
+    });
+    return () => sub.remove();
+  }, []);
   return null;
 }
 
 function RootNavigator() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
+      <PushTapListener />
       <Stack.Screen name="index" />
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(admin)" />

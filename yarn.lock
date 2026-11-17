@@ -878,6 +878,14 @@
     debug "^4.3.4"
     getenv "^2.0.0"
 
+"@expo/env@~2.6.0":
+  version "2.6.0"
+  resolved "https://registry.npmmirror.com/@expo/env/-/env-2.6.0.tgz#0c78108512b2481bccd6654ae319bf3874dddf40"
+  integrity sha512-pSNESQU0IGhLs/A3QlNPoh/acb1vWU7N721OjaIm3JT8yzgZymIM/m4x2y73YwpEtqgwWsCl6+japtq2PtXIPw==
+  dependencies:
+    chalk "^4.0.0"
+    debug "^4.3.4"
+
 "@expo/fingerprint@^0.21.8":
   version "0.21.8"
   resolved "https://registry.npmmirror.com/@expo/fingerprint/-/fingerprint-0.21.8.tgz#17af794fa20c192e83750ab4f7658b05220e0cca"
@@ -904,6 +912,18 @@
     "@expo/spawn-async" "^1.8.0"
     chalk "^4.0.0"
     getenv "^2.0.0"
+    jimp-compact "0.16.1"
+    parse-png "^2.1.0"
+    semver "^7.7.4"
+
+"@expo/image-utils@^0.12.7":
+  version "0.12.7"
+  resolved "https://registry.npmmirror.com/@expo/image-utils/-/image-utils-0.12.7.tgz#298dd926e85734cb4d2e686c1dd5c80849974eb5"
+  integrity sha512-fuiRQxvvkbj932BamtYh1UKuyRJ5tXBJ3XxpGm5pT4zzynPmygd3RtOQrzIhcsIZGcG6i1n+KvrszYRnk3evqQ==
+  dependencies:
+    "@expo/require-utils" "^58.0.6"
+    "@expo/spawn-async" "^1.8.0"
+    chalk "^4.0.0"
     jimp-compact "0.16.1"
     parse-png "^2.1.0"
     semver "^7.7.4"
@@ -1101,6 +1121,15 @@
   version "58.0.5"
   resolved "https://registry.npmmirror.com/@expo/require-utils/-/require-utils-58.0.5.tgz#f41c42faaa7287210a332545d36b73bbefb0d381"
   integrity sha512-14dGubYUBmJjK9aqVSGnwSDs9uaxfzvtqJugtMCEWyuTa/eIvToUbzUwpKCSek6S/hYSEYcgds23vDJhXSBpbQ==
+  dependencies:
+    "@babel/code-frame" "^7.20.0"
+    "@babel/core" "^7.25.2"
+    "@babel/plugin-transform-modules-commonjs" "^7.24.8"
+
+"@expo/require-utils@^58.0.6":
+  version "58.0.6"
+  resolved "https://registry.npmmirror.com/@expo/require-utils/-/require-utils-58.0.6.tgz#0baae831b3d4560ac82ff8a564700aafefae3489"
+  integrity sha512-k9Ce7indjY3+nRBNT6wKw7NghN7pP6WhFnYNjuDiAypwjtVgaZHpD9fo0/g3/emDUpM6ebl8Ekz/teyUGfD9og==
   dependencies:
     "@babel/code-frame" "^7.20.0"
     "@babel/core" "^7.25.2"
@@ -2268,6 +2297,13 @@ abitype@^1.0.6, abitype@^1.2.3:
   resolved "https://registry.npmmirror.com/abitype/-/abitype-1.3.0.tgz#39de89010dd7390ece44d5242a3aa80901cc193d"
   integrity sha512-fk6Te+bojIFrMvMZrnOO+SxCB+RUksTGOzq/60ZRvs1L+BVzvi2bqt9L3W/17ZLdZsyM1FuYf65P5nlmoiH1Bg==
 
+abort-controller@^3.0.0:
+  version "3.0.0"
+  resolved "https://registry.npmmirror.com/abort-controller/-/abort-controller-3.0.0.tgz#eaf54d53b62bae4138e809ca225c8439a6efb392"
+  integrity sha512-h8lQ8tacZYnR3vNQTgibj+tODHI5/+l06Au2Pcriv/Gmet0eaj4TwWH41sO9wnHDiQsEj19q0drzdWdeAHtweg==
+  dependencies:
+    event-target-shim "^5.0.0"
+
 accepts@^1.3.8:
   version "1.3.8"
   resolved "https://registry.npmmirror.com/accepts/-/accepts-1.3.8.tgz#0bf0be125b67014adcb0b0921e62db7bffe16b2e"
@@ -2626,6 +2662,11 @@ babel-preset-expo@~58.0.0, babel-preset-expo@~58.0.23:
     babel-plugin-syntax-hermes-parser "^0.36.0"
     babel-plugin-transform-flow-enums "^0.0.2"
     debug "^4.3.4"
+
+badgin@^1.1.5:
+  version "1.2.3"
+  resolved "https://registry.npmmirror.com/badgin/-/badgin-1.2.3.tgz#994b5f519827d7d5422224825b2c8faea2bc43ad"
+  integrity sha512-NQGA7LcfCpSzIbGRbkgjgdWkjy7HI+Th5VLxTJfW5EeaAf3fnS+xWQaQOCYiny+q6QSvxqoSO04vCx+4u++EJw==
 
 balanced-match@^1.0.0:
   version "1.0.2"
@@ -3684,6 +3725,11 @@ etag@~1.8.1:
   resolved "https://registry.npmmirror.com/etag/-/etag-1.8.1.tgz#41ae2eeb65efa62268aebfea83ac7d79299b0887"
   integrity sha512-aIL5Fx7mawVa300al2BnEE4iNvo1qETxLrPI/o05L7z6go7fCw1J6EQmbK4FmJ2AS7kgVF/KEZWufBfdClMcPg==
 
+event-target-shim@^5.0.0:
+  version "5.0.1"
+  resolved "https://registry.npmmirror.com/event-target-shim/-/event-target-shim-5.0.1.tgz#5d4d3ebdf9583d63a5333ce2deb7480ab2b05789"
+  integrity sha512-i/2XbnSz/uxRCU6+NdVJgKWDTM427+MqYbkQzD321DuCQJUqOuJKIA0IM2+W2xtYHdKOmZ4dR6fExsd4SXL+WQ==
+
 eventemitter3@5.0.1:
   version "5.0.1"
   resolved "https://registry.npmmirror.com/eventemitter3/-/eventemitter3-5.0.1.tgz#53f5ffd0a492ac800721bb42c66b841de96423c4"
@@ -3693,6 +3739,11 @@ eventemitter3@^5.0.1:
   version "5.0.4"
   resolved "https://registry.npmmirror.com/eventemitter3/-/eventemitter3-5.0.4.tgz#a86d66170433712dde814707ac52b5271ceb1feb"
   integrity sha512-mlsTRyGaPBjPedk6Bvw+aqbsXDtoAyAzm5MO7JgU+yVRyMQ5O8bD4Kcci7BS85f93veegeCPkL8R4GLClnjLFw==
+
+expo-application@~58.1.2:
+  version "58.1.2"
+  resolved "https://registry.npmmirror.com/expo-application/-/expo-application-58.1.2.tgz#6ce5f512bbaaa912e83d02efa821bf557ba79c92"
+  integrity sha512-WYFdNHGaxe/j69oYREhK0cKsKYszuIuz399WXYCP+M1grfO+FCWB/RbuMgaXJsLWlzqhNjA/zLgfJ+33FwrQvw==
 
 expo-asset@~58.0.19:
   version "58.0.19"
@@ -3714,6 +3765,21 @@ expo-constants@~58.0.14:
   dependencies:
     "@expo/env" "~2.5.3"
     "@expo/require-utils" "^58.0.5"
+
+expo-constants@~58.0.16:
+  version "58.0.16"
+  resolved "https://registry.npmmirror.com/expo-constants/-/expo-constants-58.0.16.tgz#8a9a3290752dda7fec501f3e5c1bb752e9a72aa9"
+  integrity sha512-sVETnE1ktBMclc2Ve3qNrHhOCCio75a9JdghnJYGbqblmKfrrfE+lO9K4g9kNtmslIBLTK9Dyty6PbubkXs3Yw==
+  dependencies:
+    "@expo/env" "~2.6.0"
+    "@expo/require-utils" "^58.0.6"
+
+expo-device@~58.0.5:
+  version "58.0.5"
+  resolved "https://registry.npmmirror.com/expo-device/-/expo-device-58.0.5.tgz#eb931a584ee667a5be4c29b3a9250a20d9f5517f"
+  integrity sha512-GNyaHPwoiI/z2SGR14R6d9J7hFSW2JabZieJtC3l6/LO2mJYVCbhEsQ7/1ljGBeTUnFFWHcFLccdaWEhOWtaQQ==
+  dependencies:
+    ua-parser-js "^0.7.33"
 
 expo-file-system@~58.0.13:
   version "58.0.13"
@@ -3816,6 +3882,17 @@ expo-modules-macros@0.27.1:
     "@expo/modules-macros-linux-x64" "0.27.1"
     "@expo/modules-macros-win32-arm64" "0.27.1"
     "@expo/modules-macros-win32-x64" "0.27.1"
+
+expo-notifications@~58.1.9:
+  version "58.1.9"
+  resolved "https://registry.npmmirror.com/expo-notifications/-/expo-notifications-58.1.9.tgz#1705ce5e30a58388364291e1c30e0e4ef90d545c"
+  integrity sha512-Zhixn1+3hdd+XqwAwnNqggePs+/fcwERoBxrxTaJjfEMA0N9Q4RPm2iIsBuzKxrccRBJz0BMF2QULQXoA5yGtw==
+  dependencies:
+    "@expo/image-utils" "^0.12.7"
+    abort-controller "^3.0.0"
+    badgin "^1.1.5"
+    expo-application "~58.1.2"
+    expo-constants "~58.0.16"
 
 expo-router@~58.0.29:
   version "58.0.29"
@@ -7209,6 +7286,11 @@ typescript@~6.0.3:
   version "6.0.3"
   resolved "https://registry.npmmirror.com/typescript/-/typescript-6.0.3.tgz#90251dc007916e972786cb94d74d15b185577d21"
   integrity sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw==
+
+ua-parser-js@^0.7.33:
+  version "0.7.41"
+  resolved "https://registry.npmmirror.com/ua-parser-js/-/ua-parser-js-0.7.41.tgz#9f6dee58c389e8afababa62a4a2dc22edb69a452"
+  integrity sha512-O3oYyCMPYgNNHuO7Jjk3uacJWZF8loBgwrfd/5LE/HyZ3lUIOdniQ7DNXJcIgZbwioZxk0fLfI4EVnetdiX5jg==
 
 ua-parser-js@^1.0.35:
   version "1.0.41"
