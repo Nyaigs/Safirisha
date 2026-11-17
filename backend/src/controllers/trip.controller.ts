@@ -8,6 +8,7 @@ import { DRIVER_LOCATION_MAX_AGE_MS, findNearbyDrivers, hasFreshDriverLocation }
 import { createNotification } from "../services/notification.service";
 import { getExpiryDate } from "../services/trip.service";
 import { getValidQuote, markQuoteUsed } from "../services/quote.service";
+import { sendPushNotification } from "../services/push.service";
 
 const DRIVER_ACCEPT_RADIUS_KM = 25;
 
@@ -798,6 +799,25 @@ export async function acceptTripRequest(req: AuthRequest, res: Response) {
         vehicleType: driver.vehicleType || "",
       },
     });
+
+    // H-06: Fire Push Notification to the Customer
+    try {
+      const customer = await prisma.user.findUnique({
+        where: { id: updatedTrip.customerId },
+        select: { expoPushToken: true }
+      });
+      
+      if (customer?.expoPushToken) {
+        void sendPushNotification(
+          customer.expoPushToken,
+          "Driver Found! 🚚",
+          `${driver.user.fullName} (${driver.plateNumber}) is on the way to pick up your goods.`,
+          { tripId: updatedTrip.id, screen: "live-trip" }
+        );
+      }
+    } catch (pushError) {
+      console.warn("Failed to send push notification on accept:", pushError);
+    }
 
     try {
       await createNotification({
