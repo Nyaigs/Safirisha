@@ -11,6 +11,7 @@ import {
   processScheduledTrips,
   cleanupExpiredQuotesJob,
 } from "./services/scheduledTripWorker";
+import { revertGhostTrips } from "./services/ghostTripWorker";
 import { initSocket } from "./socket/index";
 
 const PORT = Number(process.env.PORT) || 5000;
@@ -60,7 +61,11 @@ async function startServer() {
       });
       if (activeCount === 0) return;
 
-      await Promise.all([processScheduledTrips(io), expireStaleSearchingTrips(io)]);
+      await Promise.all([
+        processScheduledTrips(io), 
+        expireStaleSearchingTrips(io), 
+        revertGhostTrips(io)
+      ]);
     } catch (error: any) {
       if (error.code === "P1001") {
         console.log("Database asleep, skipping trip worker...");
