@@ -60,8 +60,8 @@ export async function registerForPushNotificationsAsync(): Promise<void> {
       return;
     }
 
-    await apiFetch("/users/me", {
-      method: "PUT",
+    await apiFetch("/auth/me", {
+      method: "PATCH",
       body: { expoPushToken: token },
     });
     console.log("[Push] Token saved to backend");

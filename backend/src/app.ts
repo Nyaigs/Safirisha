@@ -14,7 +14,6 @@ import driverRoutes from "./routes/driver.routes";
 import notificationRoutes from "./routes/notification.routes";
 import paymentRoutes from "./routes/payment.routes";
 import tripRoutes from "./routes/trip.routes";
-import userRoutes from "./routes/user.routes";
 
 const app = express();
 
@@ -64,7 +63,6 @@ app.get("/api/health", (_req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/drivers", driverRoutes);
 app.use("/api/trips", tripRoutes);
-app.use("/api/users", userRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/ai", aiRoutes);
