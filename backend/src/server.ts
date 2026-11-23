@@ -124,3 +124,13 @@ async function startServer() {
 }
 
 startServer();
+
+// Global Error Handlers (P0 from Audit)
+process.on("unhandledRejection", (reason) => {
+  console.error("[FATAL] Unhandled Rejection:", reason);
+  // Sentry.captureException(reason); // Uncomment if Sentry is imported here
+});
+process.on("uncaughtException", (error) => {
+  console.error("[FATAL] Uncaught Exception:", error);
+  // Sentry.captureException(error);
+});

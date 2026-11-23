@@ -323,7 +323,7 @@ export default function SearchingScreen() {
     };
 
     pollTrip();
-    const interval = setInterval(pollTrip, 4000);
+    const interval = setInterval(pollTrip, 10000);
     return () => {
       active = false;
       clearInterval(interval);

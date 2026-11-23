@@ -653,10 +653,21 @@ export async function getTripById(req: AuthRequest, res: Response) {
       return res.status(404).json({ message: "Trip not found" });
     }
 
+    let isAssignedDriver = false;
+    if (role === "DRIVER") {
+      const driverProfile = await prisma.driverProfile.findUnique({
+        where: { userId },
+        select: { id: true }
+      });
+      if (driverProfile && trip.assignedDriverId === driverProfile.id) {
+        isAssignedDriver = true;
+      }
+    }
+
     const allowed =
       role === "ADMIN" ||
       trip.customerId === userId ||
-      trip.assignedDriver?.userId === userId;
+      isAssignedDriver;
 
     if (!allowed) {
       return res.status(403).json({ message: "Forbidden" });
