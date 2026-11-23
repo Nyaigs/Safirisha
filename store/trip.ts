@@ -143,6 +143,18 @@ export const useTripStore = create<TripState>()((set, get) => ({
       const res = await apiFetch(`/trips/${tripId}`);
       const trip: Trip | undefined = res?.trip;
       if (trip) {
+        const currentTrip = get().currentTrip;
+        // P1 FIX: Prevent stale REST data from overwriting fresh Socket data
+        if (currentTrip && currentTrip.id === trip.id) {
+          const currentUpdated = new Date(currentTrip.updatedAt || 0).getTime();
+          const fetchedUpdated = new Date(trip.updatedAt || 0).getTime();
+          
+          if (fetchedUpdated < currentUpdated) {
+            console.log("[fetchTrip] Ignoring stale REST data (Socket is ahead)");
+            set({ isLoading: false });
+            return;
+          }
+        }
         set({ currentTrip: trip, isLoading: false });
       } else {
         set({ isLoading: false, error: "Trip not found" });
