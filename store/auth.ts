@@ -29,7 +29,14 @@ export type User = {
   driverProfile?: DriverProfile | null;
 };
 
-export type AuthMode = "legacy" | "clerk" | null;
+export // P1 FIX: Clerk signOut handler (registered by _layout.tsx)
+let cachedClerkSignOut: (() => Promise<void>) | null = null;
+
+export function setClerkSignOutHandler(fn: (() => Promise<void>) | null) {
+  cachedClerkSignOut = fn;
+}
+
+type AuthMode = "legacy" | "clerk" | null;
 
 type AuthState = {
   user: User | null;
@@ -63,6 +70,12 @@ login: (user, token = null, authMode = "legacy") => {
       },
 
       logout: () => {
+        // P1 FIX: Sign out of Clerk first (if logged in via Clerk)
+        if (cachedClerkSignOut) {
+          void cachedClerkSignOut().catch((err) =>
+            console.warn("[logout] Clerk signOut failed:", err)
+          );
+        }
         disconnectSocket();
         setLegacyToken(null);
         set({

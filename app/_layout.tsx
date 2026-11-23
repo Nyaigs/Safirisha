@@ -9,7 +9,7 @@ if (process.env.EXPO_PUBLIC_SENTRY_DSN) {
   });
 }
 
-import { ClerkProvider, useAuth } from "@clerk/expo";
+import { ClerkProvider, useAuth, useClerk } from "@clerk/expo";
 import { tokenCache } from "@clerk/expo/token-cache";
 import { Stack } from "expo-router";
 import { useEffect } from "react";
@@ -21,7 +21,7 @@ import {
 } from "../lib/auth-token";
 import { disconnectSocket, setTokenProvider } from "../lib/socket";
 import { setLogoutHandler } from "../lib/api";
-import { useAuthStore } from "../store/auth";
+import { useAuthStore, setClerkSignOutHandler } from "../store/auth";
 import { registerForPushNotificationsAsync } from "../lib/notifications";
 import * as Notifications from "expo-notifications";
 import { router as expoRouter } from "expo-router";
@@ -30,8 +30,15 @@ const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
 function ClerkTokenBridge() {
   const { isLoaded, isSignedIn, getToken } = useAuth();
+  const { signOut } = useClerk();
   const authMode = useAuthStore((state) => state.authMode);
   const logout = useAuthStore((state) => state.logout);
+
+  // P1 FIX: Register Clerk signOut so store logout() can call it
+  useEffect(() => {
+    setClerkSignOutHandler(signOut);
+    return () => setClerkSignOutHandler(null);
+  }, [signOut]);
 
   useEffect(() => {
     setTokenProvider(getBestAccessToken);
