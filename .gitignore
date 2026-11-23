@@ -98,3 +98,10 @@ temp/
 # Local backups (dev safety only)
 .backups/
 *.backup
+
+# Internal documentation (never push to public repo)
+ENGINEERING_ROADMAP.md
+AUDIT_REPORT.md
+AUDIT_*.md
+*_INTERNAL.md
+
