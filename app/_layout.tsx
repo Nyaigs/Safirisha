@@ -12,7 +12,7 @@ if (process.env.EXPO_PUBLIC_SENTRY_DSN) {
 import { ClerkProvider, useAuth, useClerk } from "@clerk/expo";
 import { tokenCache } from "@clerk/expo/token-cache";
 import { Stack } from "expo-router";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import {
   clearCachedClerkToken,
   getBestAccessToken,
@@ -33,6 +33,9 @@ function ClerkTokenBridge() {
   const { signOut } = useClerk();
   const authMode = useAuthStore((state) => state.authMode);
   const logout = useAuthStore((state) => state.logout);
+
+  // P1 #15: Dedup — only register push token once per auth session
+  const pushRegistrationRef = useRef(false);
 
   // P1 FIX: Register Clerk signOut so store logout() can call it
   useEffect(() => {
@@ -106,10 +109,18 @@ function ClerkTokenBridge() {
     }
   }, [authMode, isLoaded, isSignedIn, logout]);
 
-  // H06_PUSH_REGISTRATION_EFFECT — fire once when session becomes authenticated
+  // H06_PUSH_REGISTRATION_EFFECT — fire once per session, not on every auth re-render
   useEffect(() => {
-    if (isLoaded && isSignedIn) {
+    if (!isLoaded) return;
+
+    if (isSignedIn && !pushRegistrationRef.current) {
+      pushRegistrationRef.current = true;
       void registerForPushNotificationsAsync();
+    }
+
+    if (!isSignedIn) {
+      // Reset on logout so next login registers a fresh token
+      pushRegistrationRef.current = false;
     }
   }, [isLoaded, isSignedIn]);
 
@@ -156,7 +167,7 @@ export default function RootLayout() {
   }
 
   return (
-    <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache} redirectUrl="safirisha://oauth-redirect">
+    <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
       <ClerkTokenBridge />
       <RootNavigator />
     </ClerkProvider>
