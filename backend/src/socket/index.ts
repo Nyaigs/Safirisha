@@ -23,27 +23,6 @@ const chatRateLimits = new Map<string, { count: number, timestamp: number }>();
 /**
  * Live in-memory registry of ONLINE drivers with reference counting for multi-tab support
  */
-const onlineDrivers = new Map<string, Set<string>>();
-
-function addOnlineDriver(userId: string, socketId: string) {
-  if (!onlineDrivers.has(userId)) {
-    onlineDrivers.set(userId, new Set());
-  }
-  onlineDrivers.get(userId)!.add(socketId);
-}
-
-function removeOnlineDriver(userId: string, socketId: string) {
-  const sockets = onlineDrivers.get(userId);
-  if (!sockets) return;
-  sockets.delete(socketId);
-  if (sockets.size === 0) {
-    onlineDrivers.delete(userId);
-  }
-}
-
-function isDriverFullyOnline(userId: string): boolean {
-  return (onlineDrivers.get(userId)?.size ?? 0) > 0;
-}
 
 async function resolveSocketUser(token?: string): Promise<SocketUser | null> {
   if (!token) return null;
@@ -137,33 +116,12 @@ export function initSocket(server: HttpServer) {
     /**
      * DRIVER GOES ONLINE
      */
-    socket.on("driver:online", async () => {
-      if (user.role !== "DRIVER") return;
-
-      try {
-        const driver = await prisma.driverProfile.findUnique({
-          where: { userId: user.id },
-        });
-
-        if (driver?.availability !== "ONLINE" && driver?.availability !== "BUSY") return;
-        addOnlineDriver(user.id, socket.id);
-        socket.join("drivers:online");
-      } catch (error) {
-        console.error("driver:online error:", error);
-      }
-    });
+    
 
     /**
      * DRIVER GOES OFFLINE
      */
-    socket.on("driver:offline", () => {
-      if (user.role !== "DRIVER") return;
-
-      removeOnlineDriver(user.id, socket.id);
-      socket.leave("drivers:online");
-
-      // Availability is written only by the authenticated REST endpoint.
-    });
+    
 
     socket.on("join_trip_room", async (tripId: string) => {
       const trip = await prisma.transportRequest.findUnique({
@@ -186,7 +144,6 @@ export function initSocket(server: HttpServer) {
     socket.on("leave_trip_room", (tripId: string) => {
       socket.leave(`trip:${tripId}`);
     });
-
 
     socket.on("send_chat_message", async (payload: { tripId: string; text: string }) => {
       if (!payload.tripId || !payload.text) return;
@@ -235,11 +192,7 @@ export function initSocket(server: HttpServer) {
     });
 
     socket.on("disconnect", async () => {
-      if (user.role === "DRIVER") {
-        removeOnlineDriver(user.id, socket.id);
-
-        if (!isDriverFullyOnline(user.id)) socket.leave("drivers:online");
-      }
+      // P1 #18: In-memory driver map removed. DB is the single source of truth.
     });
   });
 
@@ -250,6 +203,3 @@ export function getIO() {
   return io;
 }
 
-export function getOnlineDrivers() {
-  return Array.from(onlineDrivers.keys());
-}

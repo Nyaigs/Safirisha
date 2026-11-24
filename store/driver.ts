@@ -101,7 +101,7 @@ export const useDriverStore = create<DriverState>()(
 
           if (isOnline) {
             const socket = connectSocket();
-            socket.emit("driver:online");
+            
           }
         } catch (err: any) {
           set({
@@ -144,11 +144,7 @@ export const useDriverStore = create<DriverState>()(
           set({ isOnline: false, isToggling: false, error: err?.message ?? "Could not go online" });
           throw err;
         }
-        try {
-          connectSocket().emit("driver:online");
-        } catch {
-          set({ error: "You are online, but live updates are unavailable. Refresh to reconnect." });
-        }
+
       },
 
       goOffline: async () => {
@@ -178,12 +174,7 @@ export const useDriverStore = create<DriverState>()(
           set({ isToggling: false, error: err?.message ?? "Could not go offline" });
           throw err;
         }
-        try {
-          const socket = getSocket();
-          if (socket?.connected) socket.emit("driver:offline");
-        } catch {
-          set({ error: "You are offline, but live updates are unavailable. Refresh to reconnect." });
-        }
+
       },
 
       setActiveTrip: (trip) => set({ activeTrip: trip }),
