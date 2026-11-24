@@ -386,7 +386,7 @@ export default function ActiveTripScreen() {
         if (status !== "granted") throw new Error("Location permission denied");
 
         locationSub = await Location.watchPositionAsync(
-          { accuracy: Location.Accuracy.High, timeInterval: 15000, distanceInterval: 10 },
+          { accuracy: Location.Accuracy.High, timeInterval: 15000, distanceInterval: 20 },
           async (loc) => {
             try {
               await apiFetch("/drivers/me/location", {

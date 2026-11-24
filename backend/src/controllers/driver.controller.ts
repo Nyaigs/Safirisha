@@ -43,6 +43,18 @@ function hasValidCoordinates(lat: unknown, lng: unknown): lat is number {
     typeof lng === "number" && Number.isFinite(lng) && lng >= -180 && lng <= 180;
 }
 
+
+function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
 export async function getMyDriverProfile(req: AuthRequest, res: Response) {
   try {
     const userId = req.user?.id;
@@ -194,6 +206,21 @@ export async function updateDriverLocation(req: AuthRequest, res: Response) {
     if (!hasValidCoordinates(lat, lng)) return res.status(400).json({ message: "A valid latitude and longitude are required" });
     if (heading != null && (typeof heading !== "number" || !Number.isFinite(heading) || heading < 0 || heading > 360)) return res.status(400).json({ message: "Heading must be a valid number between 0 and 360" });
     if (speed != null && (typeof speed !== "number" || !Number.isFinite(speed) || speed < 0)) return res.status(400).json({ message: "Speed must be a valid non-negative number" });
+
+    // P1 #12: Skip redundant writes if driver hasn't moved meaningfully
+    const MIN_MOVE_METERS = 20;
+    const MAX_UPDATE_INTERVAL_MS = 30_000;
+    if (
+      typeof driver.currentLat === "number" &&
+      typeof driver.currentLng === "number" &&
+      driver.lastLocationAt &&
+      Date.now() - driver.lastLocationAt.getTime() < MAX_UPDATE_INTERVAL_MS
+    ) {
+      const movedMeters = haversineMeters(driver.currentLat, driver.currentLng, lat, lng);
+      if (movedMeters < MIN_MOVE_METERS) {
+        return res.json({ skipped: true, reason: "stationary" });
+      }
+    }
 
     const updated = await prisma.driverProfile.update({
       where: { id: driver.id },
