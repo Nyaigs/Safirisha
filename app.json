@@ -68,8 +68,14 @@
     },
     "extra": {
       "eas": {
-        "projectId": "YOUR_EAS_PROJECT_ID_HERE"
+        "projectId": "5013fd0e-1146-4fcf-af6b-e20d3f623740"
+      },
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
       }
-    }
+    },
+    "owner": "nyaigs"
   }
 }
